@@ -1,0 +1,23 @@
+/.venv/
+/.idea/
+
+.env
+.mypy_cache/
+.vscode/
+__pycache__/
+
+/data/user_settings.db-journal
+/data/user_settings.db-shm
+/data/user_settings.db-wal
+/bybit_delistings_log.txt
+/data/user_settings.db
+/data/popular_tickers.json
+/user_log.txt
+/error_log.txt
+
+.ai/mcp/mcp.json
+
+# Website — large/generated files
+/website/wp-content/
+/website/manual.html
+/website/manual.en.html
