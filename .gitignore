@@ -14,6 +14,8 @@ __pycache__/
 /data/popular_tickers.json
 /user_log.txt
 /error_log.txt
+/uvicorn.log
+/uvicorn.err.log
 
 .ai/mcp/mcp.json
 
