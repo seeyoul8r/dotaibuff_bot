@@ -8,3 +8,9 @@
 - Put the file into the Dota 2 folder:
   `...\Steam\steamapps\common\dota 2 beta\game\dota\cfg\gamestate_integration\`
 - Start or restart Dota 2.
+
+## AI recommendation
+
+- Press `Получить рекомендацию ИИ`.
+- Until real AI is connected, the bot sends a short summary of the latest GSI snapshot.
+- The summary includes match info, hero, resources, gold, KDA, abilities, and items.

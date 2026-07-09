@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import sys
 
 from aiogram import Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
@@ -10,9 +9,6 @@ from app.bot.bot_instances import admin_bot, bot
 from app.bot.handlers import admin_router, user_router
 from app.models.database import db
 
-
-if sys.platform == 'win32':
-    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 

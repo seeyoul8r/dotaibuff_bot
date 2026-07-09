@@ -1,6 +1,5 @@
 import asyncio
 import os
-import sys
 from concurrent.futures import ProcessPoolExecutor
 
 import uvicorn
@@ -8,10 +7,6 @@ import uvicorn
 from app.bot.main import start_admin_bot, start_bot
 from app.main import app
 from app.models.database import db
-
-
-if sys.platform == 'win32':
-    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 
 async def start_gsi():
