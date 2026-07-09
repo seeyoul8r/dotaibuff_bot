@@ -11,6 +11,7 @@ __pycache__/
 /data/user_settings.db-wal
 /bybit_delistings_log.txt
 /data/user_settings.db
+/data/gsi_snapshots/
 /data/popular_tickers.json
 /user_log.txt
 /error_log.txt

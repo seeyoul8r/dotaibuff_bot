@@ -38,7 +38,11 @@ class ClientLinkService:
         "hero" "1"
         "abilities" "1"
         "items" "1"
+        "draft" "1"
         "allplayers" "1"
+        "buildings" "1"
+        "minimap" "1"
+        "wearables" "1"
     }}
 }}'''
 

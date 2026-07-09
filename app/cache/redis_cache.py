@@ -47,6 +47,18 @@ class RedisCache:
             return None
         return int(match_id)
 
+    async def set_match_state(self, user_id: int, match_id: int, state: dict):
+        """Save accumulated match state."""
+        # Store normalized match state separately from raw snapshots.
+        await self._client.set(f'gsi:match_state:{user_id}:{match_id}', json.dumps(state))
+
+    async def get_match_state(self, user_id: int, match_id: int):
+        """Return accumulated match state."""
+        state = await self._client.get(f'gsi:match_state:{user_id}:{match_id}')
+        if state is None:
+            return None
+        return json.loads(state)
+
     async def close(self):
         """Close Redis client connection."""
         await self._client.aclose()
