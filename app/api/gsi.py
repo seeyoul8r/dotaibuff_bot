@@ -1,4 +1,7 @@
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
+
+from app.services.client_link_service import client_link_service
+from app.services.match_service import match_service
 
 router = APIRouter()
 
@@ -8,18 +11,13 @@ async def receive_gsi(request: Request):
     """Receive live Dota 2 data through GSI."""
     # Read raw JSON payload from the Dota 2 client.
     payload = await request.json()
+    token = payload['auth']['token']
+    user_id = await client_link_service.get_user_by_token(token)
+    if user_id is None:
+        # Reject snapshots that are not linked to a Telegram user.
+        raise HTTPException(status_code=403, detail='Unknown GSI token')
 
-    # Print only key test fields to keep console output compact.
-    game_time = payload.get("map", {}).get("game_time", 0)
-    hero_name = payload.get("hero", {}).get("name", "Unknown Hero")
-    gold = payload.get("player", {}).get("gold", 0)
-
-    print(f"[{game_time}s] Hero: {hero_name} | Gold: {gold}")
-
-    # Print allplayers only when the GSI payload includes it.
-    if "allplayers" in payload:
-        print("--- Found allplayers field! ---")
-        print(payload["allplayers"])
-        print("-------------------------------")
+    # Pass linked user snapshot to the match service and keep endpoint thin.
+    await match_service.process_snapshot(user_id, payload)
 
     return {"success": True}

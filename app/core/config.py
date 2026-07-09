@@ -14,6 +14,11 @@ class Config:
     tg_bot: TgBot
 
 
+@dataclass
+class RedisConfig:
+    redis_url: str
+
+
 def load_config(path: str | None = None) -> Config:
     """Read main bot config from environment."""
     env = Env()
@@ -26,3 +31,10 @@ def load_admin_config(path: str | None = None) -> Config:
     env = Env()
     env.read_env(path)
     return Config(tg_bot=TgBot(token=env('ADMIN_BOT_TOKEN'), admin_ids=list(map(int, env.list('ADMIN_IDS')))))
+
+
+def load_redis_config(path: str | None = None) -> RedisConfig:
+    """Read Redis config from environment."""
+    env = Env()
+    env.read_env(path)
+    return RedisConfig(redis_url=env('REDIS_URL'))

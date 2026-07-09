@@ -60,6 +60,15 @@ class Database:
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         ''')
+        # Link generated GSI config tokens to Telegram users.
+        await conn.execute('''
+            CREATE TABLE IF NOT EXISTS client_links (
+                user_id INTEGER PRIMARY KEY,
+                gsi_token TEXT UNIQUE NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
         await conn.commit()
 
 

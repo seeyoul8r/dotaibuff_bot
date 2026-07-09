@@ -22,7 +22,7 @@ async def start_gsi():
     await server.serve()
 
 
-def main_process():
+def main_process(): 
     """Start all local project services."""
     with open('error_log.txt', 'a', encoding='utf-8') as output:
         output.write(f"Main process started in PID: {os.getpid()}\n")
