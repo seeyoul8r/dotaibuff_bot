@@ -3,7 +3,7 @@
 ## GSI config
 
 - Send `/start` to the bot.
-- Press `Получить GSI config`.
+- Press `Get GSI config`.
 - Download `gamestate_integration_dot_ai_buff_bot.cfg`.
 - Put the file into the Dota 2 folder:
   `...\Steam\steamapps\common\dota 2 beta\game\dota\cfg\gamestate_integration\`
@@ -13,6 +13,11 @@
 
 ## AI recommendation
 
-- Press `Получить рекомендацию ИИ`.
+- Press `Get AI recommendation`.
 - Until real AI is connected, the bot sends a short summary of the latest GSI snapshot.
 - The summary includes match info, hero, resources, gold, KDA, abilities, and items.
+
+## Language
+
+- Press `Русский` to switch the interface to Russian.
+- The selected language is saved in user settings.

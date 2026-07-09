@@ -1,5 +1,7 @@
 from app.cache.redis_cache import redis_cache
+from app.bot.messages import mes_user
 from app.bot.bot_instances import bot
+from app.repositories.user_repository import user_repository
 from app.services.gsi_snapshot_log_service import gsi_snapshot_log_service
 from app.services.match_state_service import match_state_service
 
@@ -16,8 +18,9 @@ class MatchService:
             await match_state_service.update_match_state(user_id, match_id, payload)
             notified_match_id = await redis_cache.get_match_started_notified(user_id)
             if notified_match_id != match_id:
+                lang = await user_repository.get_user_lang(user_id)
                 # Notify user only once for each new match id.
-                await bot.send_message(user_id, text=f'Матч {match_id} начался.\nID матча: {match_id}')
+                await bot.send_message(user_id, text=mes_user[lang].match_started(match_id))
                 await redis_cache.set_match_started_notified(user_id, match_id)
             # Update active match only when Dota sends match id.
             await redis_cache.set_active_match(user_id, match_id)

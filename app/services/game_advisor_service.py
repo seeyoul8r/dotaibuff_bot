@@ -1,4 +1,5 @@
 from app.cache.redis_cache import redis_cache
+from app.bot.messages import mes_user
 from app.services.dota_state_service import dota_state_service
 
 
@@ -18,15 +19,16 @@ class GameAdvisorService:
             'dota_state': dota_state
         }
 
-    async def request_advice(self, user_id: int):
+    async def request_advice(self, user_id: int, lang: str):
         """Return current snapshot summary."""
         snapshot = await redis_cache.get_snapshot(user_id)
         if snapshot is None:
-            return 'GSI snapshot еще не получен.'
-        return self.format_snapshot(snapshot)
+            return mes_user[lang].snapshot_not_received
+        return self.format_snapshot(snapshot, lang)
 
-    def format_snapshot(self, snapshot: dict):
+    def format_snapshot(self, snapshot: dict, lang: str):
         """Format latest GSI snapshot for user."""
+        messages = mes_user[lang]
         map_data = snapshot.get('map', {})
         player = snapshot.get('player', {})
         hero = snapshot.get('hero', {})
@@ -35,18 +37,18 @@ class GameAdvisorService:
 
         # Build compact game summary from the main GSI blocks.
         lines = [
-            'Текущий snapshot',
+            messages.snapshot_title,
             '',
-            f"Матч: {map_data.get('matchid')}",
-            f"Время: {map_data.get('game_time')} сек",
-            f"Герой: {hero.get('name')}",
-            f"Уровень: {hero.get('level')}",
+            f"{messages.match_label}: {map_data.get('matchid')}",
+            f"{messages.time_label}: {map_data.get('game_time')} {messages.seconds_label}",
+            f"{messages.hero_label}: {hero.get('name')}",
+            f"{messages.level_label}: {hero.get('level')}",
             f"HP: {hero.get('health')} / {hero.get('max_health')}",
             f"Mana: {hero.get('mana')} / {hero.get('max_mana')}",
-            f"Gold: {player.get('gold')}",
+            f"{messages.gold_label}: {player.get('gold')}",
             f"KDA: {player.get('kills')} / {player.get('deaths')} / {player.get('assists')}",
             '',
-            'Abilities:'
+            f'{messages.abilities_label}:'
         ]
 
         # Add learned abilities with level and cooldown information.
@@ -57,7 +59,7 @@ class GameAdvisorService:
                 )
 
         lines.append('')
-        lines.append('Items:')
+        lines.append(f'{messages.items_label}:')
 
         # Add filled item slots from the latest GSI snapshot.
         for item in items.values():

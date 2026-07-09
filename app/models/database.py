@@ -57,6 +57,7 @@ class Database:
                 first_name TEXT,
                 username TEXT,
                 is_admin INTEGER DEFAULT 0,
+                lang TEXT DEFAULT 'ru',
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         ''')

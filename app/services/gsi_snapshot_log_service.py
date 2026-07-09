@@ -7,11 +7,16 @@ GSI_SNAPSHOTS_DIR = Path('data') / 'gsi_snapshots'
 
 
 class GsiSnapshotLogService:
+    def __init__(self):
+        """Create snapshot log session id."""
+        self.session_id = datetime.now().strftime('%Y%m%d_%H%M%S')
+        print(f'GSI snapshot log session: {self.session_id}')
+
     async def save_snapshot(self, user_id: int, match_id: int | None, payload: dict):
         """Save GSI snapshot to JSONL file."""
         GSI_SNAPSHOTS_DIR.mkdir(parents=True, exist_ok=True)
         file_match_id = 'unknown' if match_id is None else match_id
-        file_path = GSI_SNAPSHOTS_DIR / f'{user_id}_{file_match_id}.jsonl'
+        file_path = GSI_SNAPSHOTS_DIR / f'{self.session_id}_{user_id}_{file_match_id}.jsonl'
         snapshot = {
             'saved_at': datetime.now(UTC).isoformat(),
             'user_id': user_id,

@@ -59,6 +59,16 @@ class RedisCache:
             return None
         return json.loads(state)
 
+    async def clear_gsi_state(self):
+        """Delete all GSI runtime keys."""
+        keys = []
+        async for key in self._client.scan_iter('gsi:*'):
+            keys.append(key)
+        if keys:
+            # Clear only runtime GSI state, not unrelated Redis data.
+            return await self._client.delete(*keys)
+        return 0
+
     async def close(self):
         """Close Redis client connection."""
         await self._client.aclose()

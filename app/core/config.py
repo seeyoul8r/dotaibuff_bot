@@ -17,6 +17,7 @@ class Config:
 @dataclass
 class RedisConfig:
     redis_url: str
+    clear_gsi_state_on_start: bool
 
 
 def load_config(path: str | None = None) -> Config:
@@ -37,4 +38,4 @@ def load_redis_config(path: str | None = None) -> RedisConfig:
     """Read Redis config from environment."""
     env = Env()
     env.read_env(path)
-    return RedisConfig(redis_url=env('REDIS_URL'))
+    return RedisConfig(redis_url=env('REDIS_URL'), clear_gsi_state_on_start=env.bool('CLEAR_GSI_STATE_ON_START'))
