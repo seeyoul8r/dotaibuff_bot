@@ -35,6 +35,18 @@ class RedisCache:
             return None
         return int(match_id)
 
+    async def set_match_started_notified(self, user_id: int, match_id: int):
+        """Save notified match id for user."""
+        # Store last notified match id to avoid repeated start messages.
+        await self._client.set(f'gsi:match_started_notified:{user_id}', match_id)
+
+    async def get_match_started_notified(self, user_id: int):
+        """Return notified match id for user."""
+        match_id = await self._client.get(f'gsi:match_started_notified:{user_id}')
+        if match_id is None:
+            return None
+        return int(match_id)
+
     async def close(self):
         """Close Redis client connection."""
         await self._client.aclose()

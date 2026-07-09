@@ -8,6 +8,7 @@
 - Положите файл в папку Dota 2:
   `...\Steam\steamapps\common\dota 2 beta\game\dota\cfg\gamestate_integration\`
 - Запустите или перезапустите Dota 2.
+- Когда начнется матч и бот получит первый GSI snapshot с match id, он отправит уведомление.
 
 ## Рекомендация ИИ
 

@@ -8,6 +8,7 @@
 - Put the file into the Dota 2 folder:
   `...\Steam\steamapps\common\dota 2 beta\game\dota\cfg\gamestate_integration\`
 - Start or restart Dota 2.
+- When a match starts and the bot receives the first GSI snapshot with match id, it sends a notification.
 
 ## AI recommendation
 

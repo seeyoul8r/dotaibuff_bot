@@ -1,4 +1,5 @@
 from app.cache.redis_cache import redis_cache
+from app.bot.bot_instances import bot
 
 
 class MatchService:
@@ -8,6 +9,11 @@ class MatchService:
         # Keep latest snapshot available for AI analysis requests.
         await redis_cache.set_snapshot(user_id, payload)
         if match_id is not None:
+            notified_match_id = await redis_cache.get_match_started_notified(user_id)
+            if notified_match_id != match_id:
+                # Notify user only once for each new match id.
+                await bot.send_message(user_id, text='Матч начался. Получаю GSI snapshots.')
+                await redis_cache.set_match_started_notified(user_id, match_id)
             # Update active match only when Dota sends match id.
             await redis_cache.set_active_match(user_id, match_id)
 
