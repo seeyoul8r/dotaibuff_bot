@@ -34,5 +34,21 @@ class UserRepository:
         ''', (lang, user_id))
         await conn.commit()
 
+    async def get_user(self, user_id: int):
+        """Return saved user profile."""
+        return await db.fetchone('''
+            SELECT user_id, first_name, username, is_admin, lang, created_at
+            FROM users
+            WHERE user_id = ?
+        ''', (user_id,))
+
+    async def get_users(self):
+        """Return saved user profiles."""
+        return await db.fetchall('''
+            SELECT user_id, first_name, username, is_admin, lang, created_at
+            FROM users
+            ORDER BY created_at DESC
+        ''')
+
 
 user_repository = UserRepository()

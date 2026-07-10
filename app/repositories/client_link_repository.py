@@ -26,5 +26,13 @@ class ClientLinkRepository:
             return None
         return row['user_id']
 
+    async def get_user_token(self, user_id: int):
+        """Return GSI token linked to user."""
+        return await db.fetchone('''
+            SELECT gsi_token, created_at, updated_at
+            FROM client_links
+            WHERE user_id = ?
+        ''', (user_id,))
+
 
 client_link_repository = ClientLinkRepository()

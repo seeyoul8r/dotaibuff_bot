@@ -240,7 +240,7 @@ gsi:match_state:{user_id}:{match_id}
 7. The handler stops the ephemeral draft and sends the three schema fields as separate localized messages.
 8. If the Gemini request fails, the handler stops the draft and sends a localized error message.
 
-The cooldown is configured by `AI_ADVICE_COOLDOWN` and is set before the paid API request. It is stored in `GameAdvisorService._cooldowns`, so it resets when the bot process restarts.
+The cooldown is configured by `AI_ADVICE_COOLDOWN` and is set before the paid API request. It is stored in `GameAdvisorService._cooldowns`, resets when the bot process restarts, and can be changed at runtime through the admin `Set advice cooldown` button.
 
 ## SQLite Tables
 
@@ -263,7 +263,15 @@ updated_at
 
 ## Admin Bot
 
-The admin bot `/start` menu includes `Update Dota data`. Pressing it forces `DotaDataService.update_data()` to run immediately. Admin chats receive Dota data update start, completion duration, loaded counts, and failure notifications.
+The admin bot `/start` menu includes maintenance actions:
+
+- `Manage User`: input a Telegram user id and view saved user/GSI token metadata.
+- `Userlist`: show saved users from SQLite.
+- `Send all`: broadcast an admin message to all saved users.
+- `Update DB`: run `db.create_tables()`.
+- `Update Dota data`: force `DotaDataService.update_data()` immediately. Admin chats receive update start, completion duration, loaded counts, and failure notifications.
+- `Set advice cooldown`: update `AI_ADVICE_COOLDOWN` in `.env` and call `GameAdvisorService.reload_config()` so the new value applies without a container restart.
+- `Error log` / `Clean log`: read or clear `error_log.txt`.
 
 
 `run_local.py` starts:

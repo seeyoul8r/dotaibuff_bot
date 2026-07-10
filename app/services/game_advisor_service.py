@@ -94,6 +94,12 @@ class GameAdvisorService:
         """Set advice cooldown for user."""
         self._cooldowns[user_id] = time.time()
 
+    def reload_config(self):
+        """Reload AI config from environment."""
+        self.config = load_ai_config()
+        # Clear old cooldown timestamps so the new limit applies immediately.
+        self._cooldowns = {}
+
     def format_snapshot(self, match_state: dict, lang: str):
         """Format accumulated match state for user."""
         messages = mes_user[lang]
