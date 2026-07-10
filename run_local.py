@@ -4,16 +4,11 @@ from concurrent.futures import ProcessPoolExecutor
 
 import uvicorn
 
-from app.bot.main import start_admin_bot, start_bot
-from app.cache.redis_cache import redis_cache, redis_config
-from app.dota_data_api import dota_data_app
-from app.main import app
-from app.models.database import db
-from app.services.dota_data_service import dota_data_service
-
 
 async def start_gsi():
     """Start local GSI API server."""
+    from app.main import app
+
     # Run FastAPI server inside the same local event loop.
     config = uvicorn.Config(app=app, host='127.0.0.1', port=8000, log_level='info')
     server = uvicorn.Server(config)
@@ -22,6 +17,8 @@ async def start_gsi():
 
 async def start_dota_data_api():
     """Start local Dota data API server."""
+    from app.dota_data_api import dota_data_app
+
     # Run Dota data API on a separate local port.
     config = uvicorn.Config(app=dota_data_app, host='127.0.0.1', port=8001, log_level='info')
     server = uvicorn.Server(config)
@@ -30,6 +27,9 @@ async def start_dota_data_api():
 
 async def prepare_runtime():
     """Prepare local runtime state before services start."""
+    from app.cache.redis_cache import redis_cache, redis_config
+    from app.models.database import db
+
     await db.create_tables()
     if redis_config.clear_gsi_state_on_start:
         # Clear stale local GSI state before collecting a new test match.
@@ -39,6 +39,9 @@ async def prepare_runtime():
 
 def main_process(): 
     """Start all local project services."""
+    from app.bot.main import start_admin_bot, start_bot
+    from app.services.dota_data_service import dota_data_service
+
     with open('error_log.txt', 'a', encoding='utf-8') as output:
         output.write(f"Main process started in PID: {os.getpid()}\n")
     loop = asyncio.new_event_loop()
