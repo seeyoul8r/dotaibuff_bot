@@ -47,6 +47,16 @@ class RedisCache:
             return None
         return int(match_id)
 
+    async def set_match_finished_notified(self, user_id: int, match_id: int):
+        """Save finished match notification flag."""
+        # Store one flag per user and match to avoid repeated post-game messages.
+        await self._client.set(f'gsi:match_finished_notified:{user_id}:{match_id}', 1)
+
+    async def get_match_finished_notified(self, user_id: int, match_id: int):
+        """Return finished match notification flag."""
+        notified = await self._client.get(f'gsi:match_finished_notified:{user_id}:{match_id}')
+        return notified is not None
+
     async def set_match_state(self, user_id: int, match_id: int, state: dict):
         """Save accumulated match state."""
         # Store normalized match state separately from raw snapshots.

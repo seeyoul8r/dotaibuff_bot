@@ -101,16 +101,18 @@ async def send_ai_advice(callback: CallbackQuery):
         await callback.message.answer(text=mes_user[lang].advice_request_failed)
         return
 
+    advice_time = mes_user[lang].advice_actual_at(match_state.get('clock_time'))
+    # Repeat match time in each advice section because Telegram messages can be read separately.
     await callback.message.answer(
-        text=f'{mes_user[lang].macro_advice_title}\n\n{advice.macro_gaming}',
+        text=f'{advice_time}\n\n{mes_user[lang].macro_advice_title}\n\n{advice.macro_gaming}',
         parse_mode=None
     )
     await callback.message.answer(
-        text=f'{mes_user[lang].build_advice_title}\n\n{advice.build}',
+        text=f'{advice_time}\n\n{mes_user[lang].build_advice_title}\n\n{advice.build}',
         parse_mode=None
     )
     await callback.message.answer(
-        text=f'{mes_user[lang].micro_advice_title}\n\n{advice.micro_gaming}',
+        text=f'{advice_time}\n\n{mes_user[lang].micro_advice_title}\n\n{advice.micro_gaming}',
         parse_mode=None
     )
 

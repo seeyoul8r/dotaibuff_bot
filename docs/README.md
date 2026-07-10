@@ -185,6 +185,7 @@ Redis runtime storage wrapper and shared instance.
 gsi:snapshot:{user_id}
 gsi:active_match:{user_id}
 gsi:match_started_notified:{user_id}
+gsi:match_finished_notified:{user_id}:{match_id}
 gsi:match_state:{user_id}:{match_id}
 ```
 
@@ -193,6 +194,8 @@ gsi:match_state:{user_id}:{match_id}
 `gsi:active_match:{user_id}` stores the current match id.
 
 `gsi:match_started_notified:{user_id}` stores the match id for which the user already received a start notification.
+
+`gsi:match_finished_notified:{user_id}:{match_id}` stores the finished match notification flag to avoid repeated post-game summaries.
 
 `gsi:match_state:{user_id}:{match_id}` stores the accumulated normalized match state.
 
@@ -217,7 +220,7 @@ gsi:match_state:{user_id}:{match_id}
 }
 ```
 
-5. `GameAdvisorService.request_advice()` sends the JSON and `GAME_ADVISOR_PROMPT` to `gemini-3-flash-preview` with the configured thinking level.
+5. `GameAdvisorService.request_advice()` sends the JSON and `GAME_ADVISOR_PROMPT` to `gemini-3-flash` with the configured thinking level.
 6. The Google Gen AI SDK parses the JSON response directly into `GameAdvice`.
 7. The handler stops the ephemeral draft and sends the three schema fields as separate localized messages.
 8. If the Gemini request fails, the handler stops the draft and sends a localized error message.
@@ -264,7 +267,7 @@ ADMIN_IDS=...
 REDIS_URL=redis://localhost:6379/0
 CLEAR_GSI_STATE_ON_START=1
 GEMINI_API_KEY=...
-GEMINI_MODEL=gemini-3-flash-preview
+GEMINI_MODEL=gemini-3-flash
 GEMINI_THINKING_LEVEL=low
 AI_ADVICE_COOLDOWN=180
 GSI_HOST=0.0.0.0
@@ -344,7 +347,7 @@ OpenDota provides patch metadata through `constants/patch`, but not full patch n
 
 - `match_id = 0` in test games causes different test matches to share the same Redis key unless `gsi:*` is cleared.
 - Enemy items, abilities, and complete player statistics are not available through the recorded GSI payloads.
-- Match completion and per-match Redis cleanup are not implemented yet.
+- Per-match Redis cleanup is not implemented yet.
 - AI recommendations require a valid `GEMINI_API_KEY` and current accumulated match state.
 - The recommendation cooldown is local to one bot process and is not shared through Redis.
 - Raw snapshot logging is temporary and should become optional debug behavior later.

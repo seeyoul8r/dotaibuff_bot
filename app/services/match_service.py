@@ -16,12 +16,20 @@ class MatchService:
         await redis_cache.set_snapshot(user_id, payload)
         if match_id is not None:
             await match_state_service.update_match_state(user_id, match_id, payload)
+            match_state = await redis_cache.get_match_state(user_id, match_id)
             notified_match_id = await redis_cache.get_match_started_notified(user_id)
             if notified_match_id != match_id:
                 lang = await user_repository.get_user_lang(user_id)
                 # Notify user only once for each new match id.
                 await bot.send_message(user_id, text=mes_user[lang].match_started(match_id))
                 await redis_cache.set_match_started_notified(user_id, match_id)
+            if payload.get('map', {}).get('game_state') == 'DOTA_GAMERULES_STATE_POST_GAME':
+                notified_finished = await redis_cache.get_match_finished_notified(user_id, match_id)
+                if not notified_finished:
+                    lang = await user_repository.get_user_lang(user_id)
+                    # Send final match summary once after Dota reports post-game state.
+                    await bot.send_message(user_id, text=mes_user[lang].match_finished(match_state))
+                    await redis_cache.set_match_finished_notified(user_id, match_id)
             # Update active match only when Dota sends match id.
             await redis_cache.set_active_match(user_id, match_id)
 
