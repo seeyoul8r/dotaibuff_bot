@@ -13,7 +13,7 @@ class DotaDataService:
         """Create empty Dota data holder."""
         self.updated_at = None
         self.is_ready = False
-        self.hero_stats = []
+        self.hero_stats = {}
         self.heroes = {}
         self.items = {}
         self.abilities = {}
@@ -36,9 +36,15 @@ class DotaDataService:
         abilities = await self.fetch_opendota_json('/constants/abilities')
         patches = await self.fetch_opendota_json('/constants/patch')
 
-        # Replace all runtime data together after successful OpenDota requests.
-        self.hero_stats = hero_stats
-        self.heroes = heroes
+        # Index heroes by the same names received from Dota GSI.
+        self.hero_stats = {hero['name']: hero for hero in hero_stats}
+        self.heroes = {
+            hero['name']: {
+                'definition': hero,
+                'stats': self.hero_stats[hero['name']]
+            }
+            for hero in heroes.values()
+        }
         self.items = items
         self.abilities = abilities
         self.patches = patches
@@ -53,13 +59,14 @@ class DotaDataService:
         return {
             'updated_at': self.updated_at,
             'is_ready': self.is_ready,
-            'hero_stats': self.hero_stats,
             'heroes': self.heroes,
             'items': self.items,
             'abilities': self.abilities,
             'patches': self.patches,
-            'latest_patch': self.latest_patch,
-            'patch_notes': self.patch_notes
+            'patch': {
+                'metadata': self.latest_patch,
+                'notes': self.patch_notes
+            }
         }
 
     async def fetch_opendota_json(self, path: str):

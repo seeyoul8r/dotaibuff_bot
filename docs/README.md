@@ -91,7 +91,7 @@ The latest real-match replay produced an exact 5v5 composition with these rules.
 
 `app/services/game_advisor_service.py`
 
-Current preview implementation formats accumulated `MatchState`. `build_prompt()` combines it with only match-relevant OpenDota hero stats, items, abilities, latest patch metadata, and patch notes.
+Current preview implementation formats accumulated `MatchState`. `build_prompt()` creates a compact AI context containing only heroes in the match, the local player's items and abilities, and current patch data.
 
 `app/services/dota_data_service.py`
 
@@ -108,6 +108,29 @@ Current OpenDota endpoints:
 ```
 
 OpenDota requires a non-default `User-Agent`; the service sends `DotAIBuffBot/0.1`.
+
+Runtime storage is indexed by GSI names:
+
+```json
+{
+  "heroes": {
+    "npc_dota_hero_warlock": {
+      "definition": {},
+      "stats": {}
+    }
+  },
+  "items": {
+    "glimmer_cape": {}
+  },
+  "abilities": {
+    "warlock_fatal_bonds": {}
+  },
+  "patch": {
+    "metadata": {},
+    "notes": {}
+  }
+}
+```
 
 `app/dota_data_api.py`
 
@@ -226,17 +249,18 @@ The Dota data service currently stores data in memory only. Endpoint response sh
 {
   "updated_at": "...",
   "is_ready": true,
-  "hero_stats": [],
   "heroes": {},
   "items": {},
   "abilities": {},
   "patches": [],
-  "latest_patch": {},
-  "patch_notes": {}
+  "patch": {
+    "metadata": {},
+    "notes": {}
+  }
 }
 ```
 
-OpenDota provides patch metadata through `constants/patch`, but not full patch note text in the currently used endpoints. `patch_notes` is kept as a separate block for the future patch notes source.
+OpenDota provides patch metadata through `constants/patch`, but not full patch note text. `patch.notes` is reserved for a future official Dota patch notes source.
 
 ## Current Limitations
 

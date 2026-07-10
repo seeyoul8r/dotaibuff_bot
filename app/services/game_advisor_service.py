@@ -22,15 +22,18 @@ class GameAdvisorService:
         # Send only match-relevant OpenDota records to the future AI client.
         dota_context = {
             'updated_at': dota_data['updated_at'],
-            'latest_patch': dota_data['latest_patch'],
-            'patch_notes': dota_data['patch_notes'],
-            'hero_stats': [hero for hero in dota_data['hero_stats'] if hero['name'] in hero_names],
-            'items': {
+            'patch': dota_data['patch'],
+            'heroes': {
+                hero_name: dota_data['heroes'][hero_name]
+                for hero_name in hero_names
+                if hero_name in dota_data['heroes']
+            },
+            'local_items': {
                 item_name: dota_data['items'][item_name.removeprefix('item_')]
                 for item_name in item_names
                 if item_name.removeprefix('item_') in dota_data['items']
             },
-            'abilities': {
+            'local_abilities': {
                 ability_name: dota_data['abilities'][ability_name]
                 for ability_name in ability_names
                 if ability_name in dota_data['abilities']
