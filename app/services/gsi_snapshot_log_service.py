@@ -1,16 +1,18 @@
 import json
+import logging
 from datetime import datetime, UTC
 from pathlib import Path
 
 
 GSI_SNAPSHOTS_DIR = Path('data') / 'gsi_snapshots'
+logger = logging.getLogger(__name__)
 
 
 class GsiSnapshotLogService:
     def __init__(self):
         """Create snapshot log session id."""
         self.session_id = datetime.now().strftime('%Y%m%d_%H%M%S')
-        print(f'GSI snapshot log session: {self.session_id}')
+        logger.info(f'GSI snapshot log session: {self.session_id}')
 
     async def save_snapshot(self, user_id: int, match_id: int | None, payload: dict):
         """Save GSI snapshot to JSONL file."""

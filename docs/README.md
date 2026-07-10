@@ -116,6 +116,8 @@ Defines the structured `GameAdvice` response with `macro_gaming`, `build`, and `
 
 `app/services/dota_data_service.py`
 
+Sends admin-bot notifications when Dota data updates start, complete, or fail. The manual admin update button uses the same `update_data()` flow as the daily updater.
+
 Collects external Dota data from OpenDota and dota2.com datafeed and keeps it in memory. It updates once on startup and then once per day.
 
 Every update prints start and completion messages to the console. The completion message includes hero, item, and ability counts plus the latest patch name.
@@ -258,6 +260,11 @@ updated_at
 ```
 
 ## Local Runtime
+
+## Admin Bot
+
+The admin bot `/start` menu includes `Update Dota data`. Pressing it forces `DotaDataService.update_data()` to run immediately. Admin chats receive Dota data update start, completion duration, loaded counts, and failure notifications.
+
 
 `run_local.py` starts:
 

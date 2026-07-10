@@ -1,4 +1,5 @@
 import asyncio
+import logging
 
 from aiogram import Bot, Router
 from aiogram.filters import CommandStart
@@ -12,6 +13,7 @@ from app.services.client_link_service import client_link_service
 from app.services.game_advisor_service import game_advisor_service
 
 
+logger = logging.getLogger(__name__)
 user_router = Router()
 GET_GSI_CONFIG = 'get_gsi_config'
 WHAT_IS_GSI_CONFIG = 'what_is_gsi_config'
@@ -90,7 +92,7 @@ async def send_ai_advice(callback: CallbackQuery):
     try:
         advice = await game_advisor_service.request_advice(callback.from_user.id, lang)
     except Exception as error:
-        print(f'Gemini advice request failed: user_id={callback.from_user.id}, error={error}')
+        logger.exception(f'Gemini advice request failed: user_id={callback.from_user.id}, error={error}')
         advice = None
     finally:
         # Stop the ephemeral draft before sending persistent result messages.

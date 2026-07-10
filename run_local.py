@@ -1,8 +1,12 @@
 import asyncio
+import logging
 import os
 from concurrent.futures import ProcessPoolExecutor
 
 import uvicorn
+
+
+logger = logging.getLogger(__name__)
 
 
 async def start_gsi():
@@ -40,19 +44,27 @@ async def prepare_runtime():
     if redis_config.clear_gsi_state_on_start:
         # Clear stale local GSI state before collecting a new test match.
         deleted = await redis_cache.clear_gsi_state()
-        print(f'GSI Redis state cleared: deleted={deleted}')
+        logger.info(f'GSI Redis state cleared: deleted={deleted}')
 
 
 def main_process(): 
     """Start all local project services."""
+    from app.bot.bot_instances import admin_bot, admin_config
     from app.bot.main import start_admin_bot, start_bot
     from app.services.dota_data_service import dota_data_service
+
+    async def notify_admins(text: str):
+        """Send service notification to admin chats."""
+        for admin_id in admin_config.tg_bot.admin_ids:
+            # Send every update status to each configured admin chat.
+            await admin_bot.send_message(admin_id, text=text)
 
     with open('error_log.txt', 'a', encoding='utf-8') as output:
         output.write(f"Main process started in PID: {os.getpid()}\n")
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     loop.run_until_complete(prepare_runtime())
+    dota_data_service.set_admin_update_notifier(notify_admins)
     loop.create_task(dota_data_service.start_daily_update())
     loop.create_task(start_bot())
     loop.create_task(start_admin_bot())

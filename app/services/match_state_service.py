@@ -1,6 +1,10 @@
+import logging
 from datetime import UTC, datetime
 
 from app.cache.redis_cache import redis_cache
+
+
+logger = logging.getLogger(__name__)
 
 
 class MatchStateService:
@@ -49,7 +53,7 @@ class MatchStateService:
             self.lock_roster_from_minimap(match_state, minimap_heroes, now)
         if match_state.get('roster_locked'):
             await redis_cache.set_match_state(user_id, match_id, match_state)
-            print(
+            logger.info(
                 f'GSI match state updated: user_id={user_id}, match_id={match_id}, '
                 f'radiant={len(match_state["radiant"]["heroes"])}, '
                 f'dire={len(match_state["dire"]["heroes"])}, '
@@ -95,7 +99,7 @@ class MatchStateService:
                 match_state['enemy_detection_ready'] = True
 
         await redis_cache.set_match_state(user_id, match_id, match_state)
-        print(
+        logger.info(
             f'GSI match state updated: user_id={user_id}, match_id={match_id}, '
             f'radiant={len(match_state["radiant"]["heroes"])}, '
             f'dire={len(match_state["dire"]["heroes"])}, '

@@ -1,5 +1,7 @@
 import asyncio
 import json
+import logging
+import time
 import urllib.request
 from urllib.parse import urlencode
 from datetime import UTC, datetime
@@ -9,6 +11,7 @@ OPENDOTA_BASE_URL = 'https://api.opendota.com/api'
 DOTA2_DATAFEED_BASE_URL = 'https://www.dota2.com/datafeed'
 DOTA2_DATAFEED_LANGUAGE = 'english'
 DOTA_DATA_UPDATE_INTERVAL = 60 * 60 * 24
+logger = logging.getLogger(__name__)
 
 
 class DotaDataService:
@@ -27,6 +30,7 @@ class DotaDataService:
         self.datafeed_items = {}
         self.hero_mechanics = {}
         self.item_mechanics = {}
+        self.admin_update_notifier = None
 
     async def start_daily_update(self):
         """Start daily Dota data update loop."""
@@ -37,46 +41,67 @@ class DotaDataService:
 
     async def update_data(self):
         """Update all collected Dota data."""
-        print('OpenDota update started.')
-        hero_stats = await self.fetch_opendota_json('/heroStats')
-        heroes = await self.fetch_opendota_json('/constants/heroes')
-        items = await self.fetch_opendota_json('/constants/items')
-        abilities = await self.fetch_opendota_json('/constants/abilities')
-        patches = await self.fetch_opendota_json('/constants/patch')
-        datafeed_heroes = await self.fetch_dota2_datafeed_json('/herolist')
-        datafeed_items = await self.fetch_dota2_datafeed_json('/itemlist')
+        started_at = time.monotonic()
+        await self.notify_admins('Dota data update started.')
+        try:
+            logger.info('Dota data update started.')
+            hero_stats = await self.fetch_opendota_json('/heroStats')
+            heroes = await self.fetch_opendota_json('/constants/heroes')
+            items = await self.fetch_opendota_json('/constants/items')
+            abilities = await self.fetch_opendota_json('/constants/abilities')
+            patches = await self.fetch_opendota_json('/constants/patch')
+            logger.info(
+                f'OpenDota data loaded: heroes={len(heroes)}, items={len(items)}, '
+                f'abilities={len(abilities)}, patch={patches[-1]["name"] if patches else None}'
+            )
+            datafeed_heroes = await self.fetch_dota2_datafeed_json('/herolist')
+            datafeed_items = await self.fetch_dota2_datafeed_json('/itemlist')
+            logger.info(
+                f'Dota 2 datafeed lists loaded: '
+                f'heroes={len(datafeed_heroes["result"]["data"]["heroes"])}, '
+                f'items={len(datafeed_items["result"]["data"]["itemabilities"])}'
+            )
 
-        # Index heroes by the same names received from Dota GSI.
-        self.hero_stats = {hero['name']: hero for hero in hero_stats}
-        self.heroes = {
-            hero['name']: {
-                'definition': hero,
-                'stats': self.hero_stats[hero['name']]
+            # Index heroes by the same names received from Dota GSI.
+            self.hero_stats = {hero['name']: hero for hero in hero_stats}
+            self.heroes = {
+                hero['name']: {
+                    'definition': hero,
+                    'stats': self.hero_stats[hero['name']]
+                }
+                for hero in heroes.values()
             }
-            for hero in heroes.values()
-        }
-        self.items = items
-        self.abilities = abilities
-        self.patches = patches
-        self.latest_patch = patches[-1] if patches else None
-        self.patch_notes = {}
-        self.datafeed_heroes = {
-            hero['name']: hero
-            for hero in datafeed_heroes['result']['data']['heroes']
-        }
-        self.datafeed_items = {
-            item['name']: item
-            for item in datafeed_items['result']['data']['itemabilities']
-        }
-        self.hero_mechanics = await self.fetch_all_hero_mechanics()
-        self.item_mechanics = {}
-        self.updated_at = datetime.now(UTC).isoformat()
-        self.is_ready = True
-        print(
-            f'Dota data update completed: heroes={len(self.heroes)}, items={len(self.items)}, '
-            f'abilities={len(self.abilities)}, mechanics={len(self.hero_mechanics)}, '
-            f'patch={self.latest_patch["name"]}'
-        )
+            self.items = items
+            self.abilities = abilities
+            self.patches = patches
+            self.latest_patch = patches[-1] if patches else None
+            self.patch_notes = {}
+            self.datafeed_heroes = {
+                hero['name']: hero
+                for hero in datafeed_heroes['result']['data']['heroes']
+            }
+            self.datafeed_items = {
+                item['name']: item
+                for item in datafeed_items['result']['data']['itemabilities']
+            }
+            self.hero_mechanics = await self.fetch_all_hero_mechanics()
+            self.item_mechanics = {}
+            self.updated_at = datetime.now(UTC).isoformat()
+            self.is_ready = True
+            duration = time.monotonic() - started_at
+            completed_message = (
+                f'Dota data update completed in {duration:.1f} sec.\n'
+                f'OpenDota: heroes={len(self.heroes)}, items={len(self.items)}, '
+                f'abilities={len(self.abilities)}, patch={self.latest_patch["name"]}\n'
+                f'Dota2 datafeed: hero_mechanics={len(self.hero_mechanics)}, '
+                f'item_list={len(self.datafeed_items)}'
+            )
+            logger.info(completed_message)
+            await self.notify_admins(completed_message)
+        except Exception as error:
+            duration = time.monotonic() - started_at
+            await self.notify_admins(f'Dota data update failed after {duration:.1f} sec.\n{error}')
+            raise
 
     def get_data(self):
         """Return current collected Dota data."""
@@ -131,11 +156,14 @@ class DotaDataService:
     async def fetch_all_hero_mechanics(self):
         """Fetch mechanics for every listed hero."""
         hero_mechanics = {}
-        for hero in self.datafeed_heroes.values():
+        heroes = list(self.datafeed_heroes.values())
+        for index, hero in enumerate(heroes, start=1):
             hero_data = await self.fetch_dota2_datafeed_json('/herodata', {'hero_id': hero['id']})
             for hero_detail in hero_data['result']['data']['heroes']:
                 # Keep mechanics indexed by GSI hero name for direct match_state lookup.
                 hero_mechanics[hero_detail['name']] = self.normalize_hero_mechanics(hero_detail)
+            if index % 25 == 0 or index == len(heroes):
+                logger.info(f'Dota 2 hero mechanics loading: {index}/{len(heroes)}')
         return hero_mechanics
 
     async def get_item_mechanics(self, item_names: set[str]):
@@ -148,6 +176,7 @@ class DotaDataService:
             for item_detail in item_data['result']['data']['items']:
                 # Cache only requested item data and avoid loading every item on startup.
                 self.item_mechanics[item_detail['name']] = self.normalize_ability_or_item(item_detail)
+                logger.info(f'Dota 2 item mechanics loaded: {item_detail["name"]}')
         return {
             item_name: self.item_mechanics[item_name]
             for item_name in item_names
@@ -222,6 +251,15 @@ class DotaDataService:
                 'required_facet': special_value.get('required_facet')
             })
         return normalized_values
+
+    def set_admin_update_notifier(self, notifier):
+        """Store admin update notification callback."""
+        self.admin_update_notifier = notifier
+
+    async def notify_admins(self, text: str):
+        """Send Dota data update notification to admins."""
+        if self.admin_update_notifier is not None:
+            await self.admin_update_notifier(text)
 
 
 dota_data_service = DotaDataService()
