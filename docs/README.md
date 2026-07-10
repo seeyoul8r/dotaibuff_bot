@@ -51,7 +51,7 @@ Temporary development logger. It appends every raw snapshot to:
 data/gsi_snapshots/{session_id}_{user_id}_{match_id}.jsonl
 ```
 
-Each line is one JSON object with `saved_at`, `user_id`, `match_id`, and raw `payload`. These files are for analysis only and are ignored by Git.
+Each line is one JSON object with `saved_at`, `user_id`, `match_id`, and sanitized `payload`. Before writing to disk, `GsiSnapshotLogService` removes `previously`, `added`, and `auth` from the saved payload. Full incoming payloads are still passed to match processing before sanitizing for disk. These files are for analysis only and are ignored by Git.
 
 `app/services/match_state_service.py`
 
@@ -347,17 +347,12 @@ player
 hero
 abilities
 items
-draft
-allplayers
 buildings
 minimap
-wearables
 ```
 
 Observed behavior so far:
 
-- `draft` was empty in recorded bot and real matches;
-- `allplayers` did not arrive in recorded matches;
 - full abilities and items are available only for the local player;
 - minimap markers expose allied heroes and currently visible enemy heroes;
 - buildings currently contain only the local player's side;
