@@ -1,7 +1,8 @@
 import json
 import time
 
-from openai import AsyncOpenAI
+from google import genai
+from google.genai import types
 
 from app.ai.prompts import GAME_ADVISOR_PROMPT
 from app.bot.messages import mes_user
@@ -16,6 +17,8 @@ class GameAdvisorService:
         """Store AI advisor configuration."""
         self.prompt = GAME_ADVISOR_PROMPT
         self.config: AIConfig = load_ai_config()
+        # Reuse one async Gemini client and its HTTP connections for all advice requests.
+        self.client = genai.Client(api_key=self.config.api_key).aio
         # Keep cooldowns in the current bot process, matching the existing manager pattern.
         self._cooldowns = {}
 
@@ -57,18 +60,19 @@ class GameAdvisorService:
         }
 
     async def request_advice(self, user_id: int, lang: str):
-        """Request structured match advice from OpenAI."""
+        """Request structured match advice from Gemini."""
         prompt_data = await self.build_prompt(user_id, lang)
-        client = AsyncOpenAI(api_key=self.config.api_key)
         # Parse schema-constrained output directly without splitting free-form model text.
-        response = await client.responses.parse(
+        response = await self.client.models.generate_content(
             model=self.config.model,
-            reasoning={'effort': self.config.reasoning_effort},
-            instructions=self.prompt,
-            input=json.dumps(prompt_data, ensure_ascii=False),
-            text_format=GameAdvice
+            contents=json.dumps(prompt_data, ensure_ascii=False),
+            config=types.GenerateContentConfig(
+                system_instruction=self.prompt,
+                response_mime_type='application/json',
+                response_schema=GameAdvice
+            )
         )
-        return response.output_parsed
+        return response.parsed
 
     def is_on_cooldown(self, user_id: int):
         """Return remaining advice cooldown seconds."""

@@ -24,7 +24,6 @@ class RedisConfig:
 class AIConfig:
     api_key: str
     model: str
-    reasoning_effort: str
     advice_cooldown: int
 
 
@@ -54,8 +53,7 @@ def load_ai_config(path: str | None = None) -> AIConfig:
     env = Env()
     env.read_env(path)
     return AIConfig(
-        api_key=env('OPENAI_API_KEY'),
-        model=env('OPENAI_MODEL'),
-        reasoning_effort=env('OPENAI_REASONING_EFFORT'),
+        api_key=env('GEMINI_API_KEY'),
+        model=env('GEMINI_MODEL'),
         advice_cooldown=env.int('AI_ADVICE_COOLDOWN')
     )

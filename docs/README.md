@@ -14,7 +14,7 @@ DotAIBuffBot is a Telegram bot plus local FastAPI service for collecting Dota 2 
 8. Raw snapshots are temporarily saved to JSONL files for development analysis.
 9. `MatchStateService` updates the normalized internal match state in Redis.
 10. `DotaDataService` collects OpenDota data on startup and then once per day.
-11. The recommendation button combines normalized match state with relevant OpenDota context and calls OpenAI.
+11. The recommendation button combines normalized match state with relevant OpenDota context and calls Gemini.
 12. The bot sends macro gaming, build, and current micro gaming advice as three Telegram messages.
 
 ## Main Components
@@ -92,7 +92,7 @@ The latest real-match replay produced an exact 5v5 composition with these rules.
 
 `app/services/game_advisor_service.py`
 
-Builds compact AI context containing only heroes in the match, the local player's items and abilities, and current patch data. It calls the OpenAI Responses API with structured output and tracks the per-user recommendation cooldown in process memory.
+Builds compact AI context containing only heroes in the match, the local player's items and abilities, and current patch data. It calls Gemini with structured output and tracks the per-user recommendation cooldown in process memory. One async Gemini client is created when the service starts and reused for all requests.
 
 `app/ai/prompts.py`
 
@@ -206,8 +206,8 @@ gsi:match_state:{user_id}:{match_id}
 }
 ```
 
-4. `GameAdvisorService.request_advice()` sends the JSON and `GAME_ADVISOR_PROMPT` to `gpt-5.4-mini` with medium reasoning effort.
-5. The OpenAI SDK parses the response directly into `GameAdvice`.
+4. `GameAdvisorService.request_advice()` sends the JSON and `GAME_ADVISOR_PROMPT` to `gemini-2.5-flash`.
+5. The Google Gen AI SDK parses the JSON response directly into `GameAdvice`.
 6. The Telegram handler sends the three schema fields as separate localized messages.
 
 The cooldown is configured by `AI_ADVICE_COOLDOWN` and is set before the paid API request. It is stored in `GameAdvisorService._cooldowns`, so it resets when the bot process restarts.
@@ -251,9 +251,8 @@ ADMIN_BOT_TOKEN=...
 ADMIN_IDS=...
 REDIS_URL=redis://localhost:6379/0
 CLEAR_GSI_STATE_ON_START=1
-OPENAI_API_KEY=...
-OPENAI_MODEL=gpt-5.4-mini
-OPENAI_REASONING_EFFORT=medium
+GEMINI_API_KEY=...
+GEMINI_MODEL=gemini-2.5-flash
 AI_ADVICE_COOLDOWN=180
 ```
 
@@ -308,7 +307,7 @@ OpenDota provides patch metadata through `constants/patch`, but not full patch n
 - `match_id = 0` in test games causes different test matches to share the same Redis key unless `gsi:*` is cleared.
 - Enemy items, abilities, and complete player statistics are not available through the recorded GSI payloads.
 - Match completion and per-match Redis cleanup are not implemented yet.
-- AI recommendations require a valid `OPENAI_API_KEY` and current accumulated match state.
+- AI recommendations require a valid `GEMINI_API_KEY` and current accumulated match state.
 - The recommendation cooldown is local to one bot process and is not shared through Redis.
 - Raw snapshot logging is temporary and should become optional debug behavior later.
 
