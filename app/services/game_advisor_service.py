@@ -28,12 +28,11 @@ class GameAdvisorService:
         match_state = await redis_cache.get_match_state(user_id, match_id)
         dota_data = dota_data_service.get_data()
 
-        hero_names = set(match_state['radiant']['heroes']) | set(match_state['dire']['heroes'])
-        hero_names |= set(match_state['unknown_heroes'])
+        hero_names = self.get_roster_hero_names(match_state)
         item_names = {item['name'] for item in match_state['items'].values()}
-        ability_names = {ability['name'] for ability in match_state['abilities'].values()}
+        item_mechanics = await dota_data_service.get_item_mechanics(item_names)
 
-        # Send only match-relevant OpenDota records to the AI client.
+        # Send only match-relevant mechanics and avoid lore or unrelated heroes.
         dota_context = {
             'updated_at': dota_data['updated_at'],
             'patch': dota_data['patch'],
@@ -42,15 +41,15 @@ class GameAdvisorService:
                 for hero_name in hero_names
                 if hero_name in dota_data['heroes']
             },
-            'local_items': {
-                item_name: dota_data['items'][item_name.removeprefix('item_')]
-                for item_name in item_names
-                if item_name.removeprefix('item_') in dota_data['items']
+            'hero_mechanics': {
+                hero_name: dota_data['hero_mechanics'][hero_name]
+                for hero_name in hero_names
+                if hero_name in dota_data['hero_mechanics']
             },
-            'local_abilities': {
-                ability_name: dota_data['abilities'][ability_name]
-                for ability_name in ability_names
-                if ability_name in dota_data['abilities']
+            'local_items': {
+                item_name: item_mechanics[item_name]
+                for item_name in item_names
+                if item_name in item_mechanics
             }
         }
         return {
@@ -58,6 +57,14 @@ class GameAdvisorService:
             'match_state': match_state,
             'dota_context': dota_context
         }
+
+    def get_roster_hero_names(self, match_state: dict):
+        """Return known match roster hero names."""
+        radiant_heroes = set(match_state['radiant']['heroes'])
+        dire_heroes = set(match_state['dire']['heroes'])
+        if len(radiant_heroes) == 5 and len(dire_heroes) == 5:
+            return radiant_heroes | dire_heroes
+        return radiant_heroes | dire_heroes
 
     async def request_advice(self, user_id: int, lang: str):
         """Request structured match advice from Gemini."""

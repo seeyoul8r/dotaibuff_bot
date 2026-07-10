@@ -13,8 +13,9 @@ DotAIBuffBot is a Telegram bot plus local FastAPI service for collecting Dota 2 
 7. `MatchService` coordinates snapshot processing.
 8. Raw snapshots are temporarily saved to JSONL files for development analysis.
 9. `MatchStateService` updates the normalized internal match state in Redis.
-10. `DotaDataService` collects OpenDota data on startup and then once per day.
-11. The recommendation button combines normalized match state with relevant OpenDota context and calls Gemini.
+   It locks the exact 5v5 roster from minimap positions when the local hero and at least 10 hero markers are visible: local hero plus the nearest 4 heroes are allies, and the next 5 heroes are enemies.
+10. `DotaDataService` collects OpenDota and dota2.com datafeed data on startup and then once per day.
+11. The recommendation button combines normalized match state with relevant Dota mechanics context and calls Gemini.
 12. The bot sends macro gaming, build, and current micro gaming advice as three Telegram messages.
 
 ## Main Components
@@ -75,6 +76,7 @@ Current state shape:
   "radiant": {"heroes": {}},
   "dire": {"heroes": {}},
   "unknown_heroes": {},
+  "roster_locked": false,
   "enemy_detection_ready": false,
   "created_at": "...",
   "updated_at": "..."
@@ -102,7 +104,7 @@ The `20260710_122845` recording demonstrated this flow. Dire was confirmed as Pu
 
 `app/services/game_advisor_service.py`
 
-Builds compact AI context containing only heroes in the match, the local player's items and abilities, and current patch data. It calls Gemini with structured output and tracks the per-user recommendation cooldown in process memory. One async Gemini client is created when the service starts and reused for all requests.
+Builds compact AI context containing only heroes in the match, Dota 2 datafeed mechanics for those heroes, the local player inventory item mechanics, and current patch data. It calls Gemini with structured output and tracks the per-user recommendation cooldown in process memory. One async Gemini client is created when the service starts and reused for all requests.
 
 `app/ai/prompts.py`
 
@@ -114,7 +116,7 @@ Defines the structured `GameAdvice` response with `macro_gaming`, `build`, and `
 
 `app/services/dota_data_service.py`
 
-Collects external Dota data from OpenDota and keeps it in memory. It updates once on startup and then once per day.
+Collects external Dota data from OpenDota and dota2.com datafeed and keeps it in memory. It updates once on startup and then once per day.
 
 Every update prints start and completion messages to the console. The completion message includes hero, item, and ability counts plus the latest patch name.
 
@@ -126,6 +128,17 @@ Current OpenDota endpoints:
 /constants/items
 /constants/abilities
 /constants/patch
+
+Dota 2 datafeed endpoints used for current mechanics:
+
+```text
+/datafeed/herolist?language=english
+/datafeed/herodata?language=english&hero_id={hero_id}
+/datafeed/itemlist?language=english
+/datafeed/itemdata?language=english&item_id={item_id}
+```
+
+Hero mechanics are loaded into memory on startup and updated daily. Item mechanics are loaded lazily for items present in the local player inventory. The AI context uses English mechanics data and only the final answer language is localized.
 ```
 
 OpenDota requires a non-default `User-Agent`; the service sends `DotAIBuffBot/0.1`.
@@ -214,13 +227,13 @@ gsi:match_state:{user_id}:{match_id}
     "updated_at": "...",
     "patch": {},
     "heroes": {},
-    "local_items": {},
-    "local_abilities": {}
+    "hero_mechanics": {},
+    "local_items": {}
   }
 }
 ```
 
-5. `GameAdvisorService.request_advice()` sends the JSON and `GAME_ADVISOR_PROMPT` to `gemini-3-flash` with the configured thinking level.
+5. `GameAdvisorService.request_advice()` sends the JSON and `GAME_ADVISOR_PROMPT` to `gemini-3.5-flash` with the configured thinking level.
 6. The Google Gen AI SDK parses the JSON response directly into `GameAdvice`.
 7. The handler stops the ephemeral draft and sends the three schema fields as separate localized messages.
 8. If the Gemini request fails, the handler stops the draft and sends a localized error message.
@@ -252,7 +265,7 @@ updated_at
 - admin Telegram bot;
 - FastAPI GSI endpoint on `GSI_HOST:GSI_PORT` (defaults to `127.0.0.1:8000`).
 - FastAPI Dota data endpoint on `DOTA_DATA_HOST:DOTA_DATA_PORT` (defaults to `127.0.0.1:8001`).
-- daily OpenDota data updater.
+- daily Dota data updater.
 
 Before local services start, `prepare_runtime()` creates SQLite tables. If `CLEAR_GSI_STATE_ON_START=1`, it deletes Redis keys matching `gsi:*`. This is a temporary development setting to avoid mixing test matches when Dota reports `match_id = 0`. Keep this at `0` on a server, otherwise every restart wipes every user's active match.
 
@@ -267,7 +280,7 @@ ADMIN_IDS=...
 REDIS_URL=redis://localhost:6379/0
 CLEAR_GSI_STATE_ON_START=1
 GEMINI_API_KEY=...
-GEMINI_MODEL=gemini-3-flash
+GEMINI_MODEL=gemini-3.5-flash
 GEMINI_THINKING_LEVEL=low
 AI_ADVICE_COOLDOWN=180
 GSI_HOST=0.0.0.0
@@ -346,7 +359,7 @@ OpenDota provides patch metadata through `constants/patch`, but not full patch n
 ## Current Limitations
 
 - `match_id = 0` in test games causes different test matches to share the same Redis key unless `gsi:*` is cleared.
-- Enemy items, abilities, and complete player statistics are not available through the recorded GSI payloads.
+- Enemy items and complete player statistics are not available through the recorded GSI payloads.
 - Per-match Redis cleanup is not implemented yet.
 - AI recommendations require a valid `GEMINI_API_KEY` and current accumulated match state.
 - The recommendation cooldown is local to one bot process and is not shared through Redis.

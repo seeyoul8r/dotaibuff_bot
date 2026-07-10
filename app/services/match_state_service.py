@@ -45,6 +45,17 @@ class MatchStateService:
 
         player_team_name = match_state['player'].get('team_name')
         minimap_heroes = self.extract_minimap_heroes(payload, player_team_name)
+        if not match_state.get('roster_locked'):
+            self.lock_roster_from_minimap(match_state, minimap_heroes, now)
+        if match_state.get('roster_locked'):
+            await redis_cache.set_match_state(user_id, match_id, match_state)
+            print(
+                f'GSI match state updated: user_id={user_id}, match_id={match_id}, '
+                f'radiant={len(match_state["radiant"]["heroes"])}, '
+                f'dire={len(match_state["dire"]["heroes"])}, '
+                f'unknown={len(match_state["unknown_heroes"])}'
+            )
+            return
         # Apply reliable allied and visible-enemy markers before resolving plain circles.
         for minimap_hero in minimap_heroes:
             if minimap_hero['image'] == 'minimap_plaincircle':
@@ -115,6 +126,7 @@ class MatchStateService:
             'radiant': {'heroes': {}},
             'dire': {'heroes': {}},
             'unknown_heroes': {},
+            'roster_locked': False,
             'enemy_detection_ready': False,
             'created_at': datetime.now(UTC).isoformat(),
             'updated_at': datetime.now(UTC).isoformat()
@@ -159,6 +171,58 @@ class MatchStateService:
                 }
             })
         return heroes
+
+    def lock_roster_from_minimap(self, match_state: dict, minimap_heroes: list, now: str):
+        """Lock exact 5v5 roster from minimap hero positions."""
+        player_team_name = match_state['player'].get('team_name')
+        local_hero_name = match_state['hero'].get('name')
+        if player_team_name not in ('radiant', 'dire') or local_hero_name is None:
+            return
+
+        hero_positions = {}
+        for minimap_hero in minimap_heroes:
+            position = minimap_hero['position']
+            if position['xpos'] is None or position['ypos'] is None:
+                continue
+            # Keep one position per visible hero in the current snapshot.
+            hero_positions[minimap_hero['hero_name']] = {
+                'xpos': float(position['xpos']),
+                'ypos': float(position['ypos'])
+            }
+
+        if local_hero_name not in hero_positions or len(hero_positions) < 10:
+            return
+
+        local_position = hero_positions[local_hero_name]
+        other_heroes = [
+            (hero_name, self.get_position_distance(local_position, position))
+            for hero_name, position in hero_positions.items()
+            if hero_name != local_hero_name
+        ]
+        other_heroes.sort(key=lambda item: item[1])
+        allied_heroes = {local_hero_name} | {hero_name for hero_name, _ in other_heroes[:4]}
+        enemy_heroes = {hero_name for hero_name, _ in other_heroes[4:9]}
+        if len(allied_heroes) != 5 or len(enemy_heroes) != 5:
+            return
+
+        opponent_team_name = 'dire' if player_team_name == 'radiant' else 'radiant'
+        match_state['radiant']['heroes'] = {}
+        match_state['dire']['heroes'] = {}
+        match_state['unknown_heroes'] = {}
+        for hero_name in allied_heroes:
+            self.apply_hero(match_state, hero_name, player_team_name, 'locked_minimap', now)
+        for hero_name in enemy_heroes:
+            self.apply_hero(match_state, hero_name, opponent_team_name, 'locked_minimap', now)
+        # Stop accepting extra stale minimap hero markers after exact 5v5 roster is known.
+        match_state['roster_locked'] = True
+        match_state['enemy_detection_ready'] = True
+
+    def get_position_distance(self, first_position: dict, second_position: dict):
+        """Return squared distance between two minimap positions."""
+        return (
+            (first_position['xpos'] - second_position['xpos']) ** 2
+            + (first_position['ypos'] - second_position['ypos']) ** 2
+        )
 
     def apply_hero(self, match_state: dict, hero_name: str, team_name: str | None, source: str, now: str):
         """Apply hero to accumulated match state."""
