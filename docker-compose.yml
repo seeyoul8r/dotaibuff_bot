@@ -9,8 +9,8 @@ services:
       # Caddy proxies public GSI traffic to this local-only FastAPI port.
       - "127.0.0.1:8000:8000"
     volumes:
-      # Keep SQLite data and raw GSI logs on the host across rebuilds.
-      - ./data:/app/data
+      # Mount project files so git pull + container restart updates the running code.
+      - .:/app
     depends_on:
       - redis
     restart: unless-stopped

@@ -313,7 +313,20 @@ DOTA_DATA_PORT=8001
 
 `Dockerfile` builds one image that runs `run_local.py` as its entrypoint, so the containerized process is the same bot + GSI API + Dota data API + daily updater bundle as the local run.
 
-`docker-compose.yml` runs that image as the `app` service, starts Redis as the `redis` service with its own named volume, reads `.env` through `env_file`, overrides `REDIS_URL` to `redis://redis:6379/0` for container networking, binds FastAPI to `127.0.0.1:8000` for Caddy, publishes no public FastAPI port, and mounts `./data` so SQLite and GSI logs survive rebuilds.
+`docker-compose.yml` runs that image as the `app` service, starts Redis as the `redis` service with its own named volume, reads `.env` through `env_file`, overrides `REDIS_URL` to `redis://redis:6379/0` for container networking, binds FastAPI to `127.0.0.1:8000` for Caddy, publishes no public FastAPI port, and bind-mounts the whole project into `/app` so `git pull` plus an app container restart updates Python code without rebuilding the image.
+
+After code-only changes on a server:
+
+```text
+git pull
+docker compose restart app
+```
+
+Rebuild is still required when `requirements.txt` or `Dockerfile` changes:
+
+```text
+docker compose up -d --build
+```
 
 Start the full local stack with:
 
