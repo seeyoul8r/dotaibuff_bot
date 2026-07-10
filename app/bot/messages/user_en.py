@@ -37,6 +37,14 @@ items_label = 'Items'
 radiant_label = 'Radiant'
 dire_label = 'Dire'
 language_changed = 'Language changed.'
+macro_advice_title = 'Macro gaming'
+build_advice_title = 'Build'
+micro_advice_title = 'Micro gaming: current priority'
+
+
+def advice_on_cooldown(remaining_time: int):
+    """Return advice cooldown message."""
+    return f'You can request the next recommendation in {remaining_time} sec.'
 
 
 def match_started(match_id: int):

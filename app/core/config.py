@@ -20,6 +20,14 @@ class RedisConfig:
     clear_gsi_state_on_start: bool
 
 
+@dataclass
+class AIConfig:
+    api_key: str
+    model: str
+    reasoning_effort: str
+    advice_cooldown: int
+
+
 def load_config(path: str | None = None) -> Config:
     """Read main bot config from environment."""
     env = Env()
@@ -39,3 +47,15 @@ def load_redis_config(path: str | None = None) -> RedisConfig:
     env = Env()
     env.read_env(path)
     return RedisConfig(redis_url=env('REDIS_URL'), clear_gsi_state_on_start=env.bool('CLEAR_GSI_STATE_ON_START'))
+
+
+def load_ai_config(path: str | None = None) -> AIConfig:
+    """Read AI config from environment."""
+    env = Env()
+    env.read_env(path)
+    return AIConfig(
+        api_key=env('OPENAI_API_KEY'),
+        model=env('OPENAI_MODEL'),
+        reasoning_effort=env('OPENAI_REASONING_EFFORT'),
+        advice_cooldown=env.int('AI_ADVICE_COOLDOWN')
+    )

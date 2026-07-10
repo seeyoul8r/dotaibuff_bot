@@ -18,8 +18,10 @@
 ## AI recommendation
 
 - Press `Get AI recommendation`.
-- Until real AI is connected, the bot sends a short summary of the accumulated match state.
-- The summary includes match state and score, hero, resources, gold, KDA, abilities, items, and team compositions.
+- The bot combines accumulated match state with current OpenDota data and requests advice from AI.
+- The response arrives as three messages: macro gaming, build, and the current micro gaming priority.
+- Each user can request advice no more than once every 3 minutes.
+- If current match GSI data has not been received yet, the bot reports it without starting an AI request.
 
 ## Language
 

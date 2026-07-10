@@ -30,6 +30,7 @@ class DotaDataService:
 
     async def update_data(self):
         """Update all collected Dota data."""
+        print('OpenDota update started.')
         hero_stats = await self.fetch_opendota_json('/heroStats')
         heroes = await self.fetch_opendota_json('/constants/heroes')
         items = await self.fetch_opendota_json('/constants/items')
@@ -52,7 +53,10 @@ class DotaDataService:
         self.patch_notes = {}
         self.updated_at = datetime.now(UTC).isoformat()
         self.is_ready = True
-        print(f'Dota data updated: updated_at={self.updated_at}')
+        print(
+            f'OpenDota update completed: heroes={len(self.heroes)}, items={len(self.items)}, '
+            f'abilities={len(self.abilities)}, patch={self.latest_patch["name"]}'
+        )
 
     def get_data(self):
         """Return current collected Dota data."""

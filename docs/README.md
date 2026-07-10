@@ -1,6 +1,6 @@
 # DotAIBuffBot
 
-DotAIBuffBot is a Telegram bot plus local FastAPI service for collecting Dota 2 Game State Integration snapshots, building an internal match state, and preparing compact data for future AI recommendations.
+DotAIBuffBot is a Telegram bot plus local FastAPI service for collecting Dota 2 Game State Integration snapshots, building an internal match state, and generating compact AI recommendations during a match.
 
 ## Runtime Flow
 
@@ -14,7 +14,8 @@ DotAIBuffBot is a Telegram bot plus local FastAPI service for collecting Dota 2 
 8. Raw snapshots are temporarily saved to JSONL files for development analysis.
 9. `MatchStateService` updates the normalized internal match state in Redis.
 10. `DotaDataService` collects OpenDota data on startup and then once per day.
-11. The recommendation button returns a summary of normalized match state. The future AI prompt combines that state with relevant OpenDota context.
+11. The recommendation button combines normalized match state with relevant OpenDota context and calls OpenAI.
+12. The bot sends macro gaming, build, and current micro gaming advice as three Telegram messages.
 
 ## Main Components
 
@@ -91,11 +92,21 @@ The latest real-match replay produced an exact 5v5 composition with these rules.
 
 `app/services/game_advisor_service.py`
 
-Current preview implementation formats accumulated `MatchState`. `build_prompt()` creates a compact AI context containing only heroes in the match, the local player's items and abilities, and current patch data.
+Builds compact AI context containing only heroes in the match, the local player's items and abilities, and current patch data. It calls the OpenAI Responses API with structured output and tracks the per-user recommendation cooldown in process memory.
+
+`app/ai/prompts.py`
+
+Stores `GAME_ADVISOR_PROMPT`. The prompt requires advice based only on supplied data and requests the answer in the user's selected language.
+
+`app/schemas/advice.py`
+
+Defines the structured `GameAdvice` response with `macro_gaming`, `build`, and `micro_gaming` fields.
 
 `app/services/dota_data_service.py`
 
 Collects external Dota data from OpenDota and keeps it in memory. It updates once on startup and then once per day.
+
+Every update prints start and completion messages to the console. The completion message includes hero, item, and ability counts plus the latest patch name.
 
 Current OpenDota endpoints:
 
@@ -175,6 +186,32 @@ gsi:match_state:{user_id}:{match_id}
 
 `gsi:match_state:{user_id}:{match_id}` stores the accumulated normalized match state.
 
+## AI Advice Flow
+
+1. The Telegram handler verifies that accumulated match state exists.
+2. It checks the in-memory cooldown for the Telegram `user_id`.
+3. `GameAdvisorService.build_prompt()` creates this JSON input:
+
+```json
+{
+  "language": "Russian",
+  "match_state": {},
+  "dota_context": {
+    "updated_at": "...",
+    "patch": {},
+    "heroes": {},
+    "local_items": {},
+    "local_abilities": {}
+  }
+}
+```
+
+4. `GameAdvisorService.request_advice()` sends the JSON and `GAME_ADVISOR_PROMPT` to `gpt-5.4-mini` with medium reasoning effort.
+5. The OpenAI SDK parses the response directly into `GameAdvice`.
+6. The Telegram handler sends the three schema fields as separate localized messages.
+
+The cooldown is configured by `AI_ADVICE_COOLDOWN` and is set before the paid API request. It is stored in `GameAdvisorService._cooldowns`, so it resets when the bot process restarts.
+
 ## SQLite Tables
 
 `users`
@@ -214,6 +251,10 @@ ADMIN_BOT_TOKEN=...
 ADMIN_IDS=...
 REDIS_URL=redis://localhost:6379/0
 CLEAR_GSI_STATE_ON_START=1
+OPENAI_API_KEY=...
+OPENAI_MODEL=gpt-5.4-mini
+OPENAI_REASONING_EFFORT=medium
+AI_ADVICE_COOLDOWN=180
 ```
 
 The generated GSI config currently requests:
@@ -267,9 +308,10 @@ OpenDota provides patch metadata through `constants/patch`, but not full patch n
 - `match_id = 0` in test games causes different test matches to share the same Redis key unless `gsi:*` is cleared.
 - Enemy items, abilities, and complete player statistics are not available through the recorded GSI payloads.
 - Match completion and per-match Redis cleanup are not implemented yet.
-- The recommendation button does not call AI yet.
+- AI recommendations require a valid `OPENAI_API_KEY` and current accumulated match state.
+- The recommendation cooldown is local to one bot process and is not shared through Redis.
 - Raw snapshot logging is temporary and should become optional debug behavior later.
 
 ## Next Architecture Step
 
-Add the real AI client and prompt execution, then derive important match events such as level-ups, item purchases, deaths, buybacks, and destroyed buildings from successive `MatchState` updates.
+Derive important match events such as level-ups, item purchases, deaths, buybacks, and destroyed buildings from successive `MatchState` updates. Add an official source for full patch note text.

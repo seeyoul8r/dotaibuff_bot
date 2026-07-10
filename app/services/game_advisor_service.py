@@ -1,14 +1,25 @@
-from app.cache.redis_cache import redis_cache
+import json
+import time
+
+from openai import AsyncOpenAI
+
+from app.ai.prompts import GAME_ADVISOR_PROMPT
 from app.bot.messages import mes_user
+from app.cache.redis_cache import redis_cache
+from app.core.config import AIConfig, load_ai_config
+from app.schemas.advice import GameAdvice
 from app.services.dota_data_service import dota_data_service
 
 
 class GameAdvisorService:
     def __init__(self):
-        """Store base AI advisor prompt."""
-        self.prompt = 'Analyze current Dota 2 game snapshot and give concise advice.'
+        """Store AI advisor configuration."""
+        self.prompt = GAME_ADVISOR_PROMPT
+        self.config: AIConfig = load_ai_config()
+        # Keep cooldowns in the current bot process, matching the existing manager pattern.
+        self._cooldowns = {}
 
-    async def build_prompt(self, user_id: int):
+    async def build_prompt(self, user_id: int, lang: str):
         """Build prompt from match state and relevant Dota data."""
         match_id = await redis_cache.get_active_match(user_id)
         match_state = await redis_cache.get_match_state(user_id, match_id)
@@ -19,7 +30,7 @@ class GameAdvisorService:
         item_names = {item['name'] for item in match_state['items'].values()}
         ability_names = {ability['name'] for ability in match_state['abilities'].values()}
 
-        # Send only match-relevant OpenDota records to the future AI client.
+        # Send only match-relevant OpenDota records to the AI client.
         dota_context = {
             'updated_at': dota_data['updated_at'],
             'patch': dota_data['patch'],
@@ -40,20 +51,36 @@ class GameAdvisorService:
             }
         }
         return {
-            'prompt': self.prompt,
+            'language': 'Russian' if lang == 'ru' else 'English',
             'match_state': match_state,
             'dota_context': dota_context
         }
 
     async def request_advice(self, user_id: int, lang: str):
-        """Return current match state summary."""
-        match_id = await redis_cache.get_active_match(user_id)
-        if match_id is None:
-            return mes_user[lang].snapshot_not_received
-        match_state = await redis_cache.get_match_state(user_id, match_id)
-        if match_state is None:
-            return mes_user[lang].snapshot_not_received
-        return self.format_snapshot(match_state, lang)
+        """Request structured match advice from OpenAI."""
+        prompt_data = await self.build_prompt(user_id, lang)
+        client = AsyncOpenAI(api_key=self.config.api_key)
+        # Parse schema-constrained output directly without splitting free-form model text.
+        response = await client.responses.parse(
+            model=self.config.model,
+            reasoning={'effort': self.config.reasoning_effort},
+            instructions=self.prompt,
+            input=json.dumps(prompt_data, ensure_ascii=False),
+            text_format=GameAdvice
+        )
+        return response.output_parsed
+
+    def is_on_cooldown(self, user_id: int):
+        """Return remaining advice cooldown seconds."""
+        current_time = time.time()
+        last_request = self._cooldowns.get(user_id, 0)
+        if current_time - last_request < self.config.advice_cooldown:
+            return int(self.config.advice_cooldown - (current_time - last_request))
+        return 0
+
+    def set_cooldown(self, user_id: int):
+        """Set advice cooldown for user."""
+        self._cooldowns[user_id] = time.time()
 
     def format_snapshot(self, match_state: dict, lang: str):
         """Format accumulated match state for user."""

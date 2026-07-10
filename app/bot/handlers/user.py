@@ -4,6 +4,7 @@ from aiogram.types import BufferedInputFile, CallbackQuery, Message
 
 from app.bot.keyboards.inline import kb_user
 from app.bot.messages import mes_user
+from app.cache.redis_cache import redis_cache
 from app.repositories.user_repository import user_repository
 from app.services.client_link_service import client_link_service
 from app.services.game_advisor_service import game_advisor_service
@@ -54,12 +55,37 @@ async def explain_gsi_config(callback: CallbackQuery):
 
 @user_router.callback_query(lambda callback: callback.data == GET_AI_ADVICE)
 async def send_ai_advice(callback: CallbackQuery):
-    """Send current snapshot summary as AI advice preview."""
+    """Send structured AI game advice."""
     lang = await user_repository.get_user_lang(callback.from_user.id)
-    advice = await game_advisor_service.request_advice(callback.from_user.id, lang)
-    # Send the latest parsed snapshot summary instead of real AI response for now.
-    await callback.message.answer(text=advice)
+    match_id = await redis_cache.get_active_match(callback.from_user.id)
+    match_state = None if match_id is None else await redis_cache.get_match_state(callback.from_user.id, match_id)
+    if match_state is None:
+        # Do not start cooldown or paid AI request until accumulated match data exists.
+        await callback.answer()
+        await callback.message.answer(text=mes_user[lang].snapshot_not_received)
+        return
+
+    remaining_time = game_advisor_service.is_on_cooldown(callback.from_user.id)
+    if remaining_time > 0:
+        await callback.answer(text=mes_user[lang].advice_on_cooldown(remaining_time), show_alert=True)
+        return
+
+    # Set cooldown before the paid request to block repeated button presses.
+    game_advisor_service.set_cooldown(callback.from_user.id)
     await callback.answer()
+    advice = await game_advisor_service.request_advice(callback.from_user.id, lang)
+    await callback.message.answer(
+        text=f'{mes_user[lang].macro_advice_title}\n\n{advice.macro_gaming}',
+        parse_mode=None
+    )
+    await callback.message.answer(
+        text=f'{mes_user[lang].build_advice_title}\n\n{advice.build}',
+        parse_mode=None
+    )
+    await callback.message.answer(
+        text=f'{mes_user[lang].micro_advice_title}\n\n{advice.micro_gaming}',
+        parse_mode=None
+    )
 
 
 @user_router.callback_query(lambda callback: callback.data == CHANGE_LANGUAGE)

@@ -37,6 +37,14 @@ items_label = 'Items'
 radiant_label = 'Radiant'
 dire_label = 'Dire'
 language_changed = 'Язык изменен.'
+macro_advice_title = 'Макрогейминг'
+build_advice_title = 'Сборка'
+micro_advice_title = 'Микрогейминг: приоритет сейчас'
+
+
+def advice_on_cooldown(remaining_time: int):
+    """Return advice cooldown message."""
+    return f'Следующую рекомендацию можно запросить через {remaining_time} сек.'
 
 
 def match_started(match_id: int):
