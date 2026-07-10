@@ -1,0 +1,12 @@
+services:
+  app:
+    build: .
+    env_file:
+      - .env
+    ports:
+      # Only the GSI endpoint needs to be reachable from outside the container.
+      - "8000:8000"
+    volumes:
+      # Keep SQLite data and raw GSI logs on the host across rebuilds.
+      - ./data:/app/data
+    restart: unless-stopped

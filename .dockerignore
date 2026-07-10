@@ -1,0 +1,11 @@
+.venv/
+.git/
+.idea/
+__pycache__/
+.env
+data/gsi_snapshots/
+data/user_settings.db
+data/user_settings.db-shm
+data/user_settings.db-wal
+*.log
+error_log.txt

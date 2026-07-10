@@ -44,7 +44,11 @@ class MatchStateService:
             self.apply_hero(match_state, player_hero['hero_name'], player_hero['team_name'], 'hero', now)
 
         player_team_name = match_state['player'].get('team_name')
-        for minimap_hero in self.extract_minimap_heroes(payload, player_team_name):
+        minimap_heroes = self.extract_minimap_heroes(payload, player_team_name)
+        # Apply reliable allied and visible-enemy markers before resolving plain circles.
+        for minimap_hero in minimap_heroes:
+            if minimap_hero['image'] == 'minimap_plaincircle':
+                continue
             hero_state = self.apply_hero(
                 match_state,
                 minimap_hero['hero_name'],
@@ -55,6 +59,29 @@ class MatchStateService:
             # Keep the last reliable visible position for map-aware advice.
             hero_state['last_seen_position'] = minimap_hero['position']
             hero_state['last_seen_image'] = minimap_hero['image']
+
+        if player_team_name in ('radiant', 'dire'):
+            local_heroes = match_state[player_team_name]['heroes']
+            plaincircle_heroes = {
+                minimap_hero['hero_name']
+                for minimap_hero in minimap_heroes
+                if minimap_hero['image'] == 'minimap_plaincircle'
+                and minimap_hero['hero_name'] not in local_heroes
+            }
+            if match_state['enemy_detection_ready']:
+                opponent_team_name = 'dire' if player_team_name == 'radiant' else 'radiant'
+                # Infer enemy roster only after the allied lineup baseline was confirmed.
+                for hero_name in plaincircle_heroes:
+                    self.apply_hero(
+                        match_state,
+                        hero_name,
+                        opponent_team_name,
+                        'minimap_plaincircle_inferred',
+                        now
+                    )
+            elif len(local_heroes) == 5 and not plaincircle_heroes:
+                # A clean five-allies snapshot separates live markers from stale draft markers.
+                match_state['enemy_detection_ready'] = True
 
         await redis_cache.set_match_state(user_id, match_id, match_state)
         print(
@@ -88,6 +115,7 @@ class MatchStateService:
             'radiant': {'heroes': {}},
             'dire': {'heroes': {}},
             'unknown_heroes': {},
+            'enemy_detection_ready': False,
             'created_at': datetime.now(UTC).isoformat(),
             'updated_at': datetime.now(UTC).isoformat()
         }
@@ -116,8 +144,10 @@ class MatchStateService:
                 team_name = player_team_name
             elif image == 'minimap_enemyicon' and player_team_name in ('radiant', 'dire'):
                 team_name = 'dire' if player_team_name == 'radiant' else 'radiant'
+            elif image == 'minimap_plaincircle':
+                team_name = None
             else:
-                # Ignore draft plain circles and unrelated temporary minimap markers.
+                # Ignore unrelated temporary minimap markers.
                 continue
             heroes.append({
                 'hero_name': hero_name,

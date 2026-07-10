@@ -1,9 +1,14 @@
 import secrets
 
+from app.core.config import ServerConfig, load_server_config
 from app.repositories.client_link_repository import client_link_repository
 
 
 class ClientLinkService:
+    def __init__(self):
+        """Store server networking configuration."""
+        self.server_config: ServerConfig = load_server_config()
+
     async def create_user_token(self, user_id: int):
         """Create and save GSI token for user."""
         # Generate a unique token used by Dota 2 GSI auth payload.
@@ -21,7 +26,7 @@ class ClientLinkService:
         # Config contains the token that links incoming snapshots to Telegram user.
         return f'''"DotAIBuffBot"
 {{
-    "uri" "http://127.0.0.1:8000/gsi"
+    "uri" "{self.server_config.gsi_public_url}"
     "timeout" "5.0"
     "buffer" "0.1"
     "throttle" "0.1"

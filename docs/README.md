@@ -75,6 +75,7 @@ Current state shape:
   "radiant": {"heroes": {}},
   "dire": {"heroes": {}},
   "unknown_heroes": {},
+  "enemy_detection_ready": false,
   "created_at": "...",
   "updated_at": "..."
 }
@@ -85,10 +86,19 @@ Current hero sources:
 - local player hero from `hero.name` and `player.team_name`;
 - allied heroes from `minimap_herocircle`, `minimap_herocircle_self`, and `minimap_heroinvis`;
 - enemy heroes from `minimap_enemyicon`;
-- `minimap_plaincircle` is ignored because hero-selection snapshots assign noisy team ids;
+- inferred enemy roster from `minimap_plaincircle` after the allied lineup baseline is confirmed;
 - the last reliable visible position is stored for each minimap hero.
 
-The latest real-match replay produced an exact 5v5 composition with these rules. Enemy data remains limited to information visible to the local player.
+`minimap_plaincircle.team` is not reliable. In the recorded match where the local player was Dire, early draft markers assigned all heroes to team `2`, while later enemy markers used both teams `2` and `4`. Team assignment therefore follows this sequence:
+
+1. `player.team_name` defines the local and opposing teams.
+2. The local hero and reliable allied minimap circles build the local roster.
+3. Early `minimap_plaincircle` markers are ignored while fewer than five allies are known.
+4. After five allies are known, a snapshot with no non-allied plain circles sets `enemy_detection_ready = true`. This clean snapshot separates stale draft/showcase markers from the live pre-game markers.
+5. New plain-circle heroes not present in the allied roster are assigned to the opposing team with source `minimap_plaincircle_inferred`.
+6. Inferred plain-circle coordinates are not stored as last-seen positions. A later `minimap_enemyicon` confirms the enemy and supplies a reliable visible position.
+
+The `20260710_122845` recording demonstrated this flow. Dire was confirmed as Pudge, Crystal Maiden, Drow Ranger, Skeleton King, and Viper. After the clean allied baseline, Axe, Nyx Assassin, Venomancer, Oracle, and Bristleback appeared and were inferred as Radiant.
 
 `app/services/game_advisor_service.py`
 
@@ -151,7 +161,7 @@ Separate FastAPI app for collected Dota data. It exposes:
 GET /dota-data
 ```
 
-Local port in `run_local.py`:
+Local port in `run_local.py`, from `DOTA_DATA_HOST`/`DOTA_DATA_PORT` (defaults below):
 
 ```text
 127.0.0.1:8001
@@ -190,7 +200,8 @@ gsi:match_state:{user_id}:{match_id}
 
 1. The Telegram handler verifies that accumulated match state exists.
 2. It checks the in-memory cooldown for the Telegram `user_id`.
-3. `GameAdvisorService.build_prompt()` creates this JSON input:
+3. The handler starts an ephemeral `sendMessageDraft` with empty text. Telegram renders its native animated Thinking placeholder, and the handler refreshes the same `draft_id` every 20 seconds.
+4. `GameAdvisorService.build_prompt()` creates this JSON input:
 
 ```json
 {
@@ -206,9 +217,10 @@ gsi:match_state:{user_id}:{match_id}
 }
 ```
 
-4. `GameAdvisorService.request_advice()` sends the JSON and `GAME_ADVISOR_PROMPT` to `gemini-2.5-flash`.
-5. The Google Gen AI SDK parses the JSON response directly into `GameAdvice`.
-6. The Telegram handler sends the three schema fields as separate localized messages.
+5. `GameAdvisorService.request_advice()` sends the JSON and `GAME_ADVISOR_PROMPT` to `gemini-3-flash-preview` with the configured thinking level.
+6. The Google Gen AI SDK parses the JSON response directly into `GameAdvice`.
+7. The handler stops the ephemeral draft and sends the three schema fields as separate localized messages.
+8. If the Gemini request fails, the handler stops the draft and sends a localized error message.
 
 The cooldown is configured by `AI_ADVICE_COOLDOWN` and is set before the paid API request. It is stored in `GameAdvisorService._cooldowns`, so it resets when the bot process restarts.
 
@@ -235,11 +247,11 @@ updated_at
 
 - main Telegram bot;
 - admin Telegram bot;
-- FastAPI GSI endpoint on `127.0.0.1:8000`.
-- FastAPI Dota data endpoint on `127.0.0.1:8001`.
+- FastAPI GSI endpoint on `GSI_HOST:GSI_PORT` (defaults to `127.0.0.1:8000`).
+- FastAPI Dota data endpoint on `DOTA_DATA_HOST:DOTA_DATA_PORT` (defaults to `127.0.0.1:8001`).
 - daily OpenDota data updater.
 
-Before local services start, `prepare_runtime()` creates SQLite tables. If `CLEAR_GSI_STATE_ON_START=1`, it deletes Redis keys matching `gsi:*`. This is a temporary development setting to avoid mixing test matches when Dota reports `match_id = 0`.
+Before local services start, `prepare_runtime()` creates SQLite tables. If `CLEAR_GSI_STATE_ON_START=1`, it deletes Redis keys matching `gsi:*`. This is a temporary development setting to avoid mixing test matches when Dota reports `match_id = 0`. Keep this at `0` on a server, otherwise every restart wipes every user's active match.
 
 ## Config
 
@@ -252,9 +264,35 @@ ADMIN_IDS=...
 REDIS_URL=redis://localhost:6379/0
 CLEAR_GSI_STATE_ON_START=1
 GEMINI_API_KEY=...
-GEMINI_MODEL=gemini-2.5-flash
+GEMINI_MODEL=gemini-3-flash-preview
+GEMINI_THINKING_LEVEL=low
 AI_ADVICE_COOLDOWN=180
+GSI_HOST=127.0.0.1
+GSI_PORT=8000
+GSI_PUBLIC_URL=http://127.0.0.1:8000/gsi
+DOTA_DATA_HOST=127.0.0.1
+DOTA_DATA_PORT=8001
 ```
+
+`GSI_HOST`/`GSI_PORT`/`DOTA_DATA_HOST`/`DOTA_DATA_PORT` and `GSI_PUBLIC_URL` all default to the values above, so an `.env` without them keeps today's local-only behavior unchanged.
+
+`GSI_PUBLIC_URL` is written into the `.cfg` file `ClientLinkService.build_gsi_config()` generates — it is the address the Dota 2 client itself sends snapshots to, so it must be reachable from the player's machine. On a server this has to be the server's public IP or domain (e.g. `http://203.0.113.10:8000/gsi`), not `127.0.0.1`.
+
+## Docker
+
+`Dockerfile` builds one image that runs `run_local.py` as its entrypoint, so the containerized process is the same bot + GSI API + Dota data API + daily updater bundle as the local run.
+
+`docker-compose.yml` runs that image as the `app` service, reads `.env` through `env_file`, publishes only port `8000` (the GSI endpoint — the Dota data API has no external consumer and stays container-internal), and mounts `./data` so SQLite and GSI logs survive rebuilds.
+
+`docker-compose.redis.yml` is an optional overlay that adds a bundled `redis` service with its own volume, for running Redis on the same host:
+
+```text
+docker compose -f docker-compose.yml -f docker-compose.redis.yml up -d --build
+```
+
+Set `REDIS_URL=redis://redis:6379/0` in `.env` when using this overlay. To use an external/managed Redis instead, run `docker compose up -d --build` without the overlay and point `REDIS_URL` at that external host — no code change either way, since `RedisConfig.redis_url` is already read from the environment.
+
+For a server deployment, also set `GSI_HOST=0.0.0.0` and `GSI_PUBLIC_URL` to the server's public address, and open the GSI port in the server firewall.
 
 The generated GSI config currently requests:
 

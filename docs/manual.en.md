@@ -19,7 +19,9 @@
 
 - Press `Get AI recommendation`.
 - The bot combines accumulated match state with current OpenDota data and requests advice from AI.
+- Telegram shows a temporary animated Thinking status while AI prepares the response.
 - The response arrives as three messages: macro gaming, build, and the current micro gaming priority.
+- If AI does not respond, the bot reports the error.
 - Each user can request advice no more than once every 3 minutes.
 - If current match GSI data has not been received yet, the bot reports it without starting an AI request.
 

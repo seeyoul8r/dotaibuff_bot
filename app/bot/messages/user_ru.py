@@ -40,6 +40,7 @@ language_changed = 'Язык изменен.'
 macro_advice_title = 'Макрогейминг'
 build_advice_title = 'Сборка'
 micro_advice_title = 'Микрогейминг: приоритет сейчас'
+advice_request_failed = 'Не удалось получить рекомендацию ИИ. Попробуйте позже.'
 
 
 def advice_on_cooldown(remaining_time: int):

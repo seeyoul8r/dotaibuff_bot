@@ -69,7 +69,8 @@ class GameAdvisorService:
             config=types.GenerateContentConfig(
                 system_instruction=self.prompt,
                 response_mime_type='application/json',
-                response_schema=GameAdvice
+                response_schema=GameAdvice,
+                thinking_config=types.ThinkingConfig(thinking_level=self.config.thinking_level)
             )
         )
         return response.parsed

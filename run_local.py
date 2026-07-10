@@ -6,21 +6,27 @@ import uvicorn
 
 
 async def start_gsi():
-    """Start local GSI API server."""
+    """Start GSI API server."""
+    from app.core.config import load_server_config
     from app.main import app
 
-    # Run FastAPI server inside the same local event loop.
-    config = uvicorn.Config(app=app, host='127.0.0.1', port=8000, log_level='info')
+    server_config = load_server_config()
+    # Host/port come from env so the same code runs unchanged locally and in Docker.
+    config = uvicorn.Config(app=app, host=server_config.gsi_host, port=server_config.gsi_port, log_level='info')
     server = uvicorn.Server(config)
     await server.serve()
 
 
 async def start_dota_data_api():
-    """Start local Dota data API server."""
+    """Start Dota data API server."""
+    from app.core.config import load_server_config
     from app.dota_data_api import dota_data_app
 
-    # Run Dota data API on a separate local port.
-    config = uvicorn.Config(app=dota_data_app, host='127.0.0.1', port=8001, log_level='info')
+    server_config = load_server_config()
+    # Host/port come from env so the same code runs unchanged locally and in Docker.
+    config = uvicorn.Config(
+        app=dota_data_app, host=server_config.dota_data_host, port=server_config.dota_data_port, log_level='info'
+    )
     server = uvicorn.Server(config)
     await server.serve()
 

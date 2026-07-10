@@ -1,4 +1,6 @@
-from aiogram import Router
+import asyncio
+
+from aiogram import Bot, Router
 from aiogram.filters import CommandStart
 from aiogram.types import BufferedInputFile, CallbackQuery, Message
 
@@ -15,6 +17,15 @@ GET_GSI_CONFIG = 'get_gsi_config'
 WHAT_IS_GSI_CONFIG = 'what_is_gsi_config'
 GET_AI_ADVICE = 'get_ai_advice'
 CHANGE_LANGUAGE = 'change_language'
+DRAFT_UPDATE_INTERVAL = 20
+
+
+async def keep_advice_draft(bot: Bot, chat_id: int, draft_id: int):
+    """Keep native Telegram thinking draft visible."""
+    while True:
+        # Empty draft text shows Telegram's native animated Thinking placeholder.
+        await bot.send_message_draft(chat_id=chat_id, draft_id=draft_id, text='')
+        await asyncio.sleep(DRAFT_UPDATE_INTERVAL)
 
 
 @user_router.message(CommandStart())
@@ -73,7 +84,23 @@ async def send_ai_advice(callback: CallbackQuery):
     # Set cooldown before the paid request to block repeated button presses.
     game_advisor_service.set_cooldown(callback.from_user.id)
     await callback.answer()
-    advice = await game_advisor_service.request_advice(callback.from_user.id, lang)
+    draft_task = asyncio.create_task(
+        keep_advice_draft(callback.bot, callback.from_user.id, callback.message.message_id)
+    )
+    try:
+        advice = await game_advisor_service.request_advice(callback.from_user.id, lang)
+    except Exception as error:
+        print(f'Gemini advice request failed: user_id={callback.from_user.id}, error={error}')
+        advice = None
+    finally:
+        # Stop the ephemeral draft before sending persistent result messages.
+        draft_task.cancel()
+        await asyncio.gather(draft_task, return_exceptions=True)
+
+    if advice is None:
+        await callback.message.answer(text=mes_user[lang].advice_request_failed)
+        return
+
     await callback.message.answer(
         text=f'{mes_user[lang].macro_advice_title}\n\n{advice.macro_gaming}',
         parse_mode=None
