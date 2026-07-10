@@ -282,15 +282,15 @@ DOTA_DATA_PORT=8001
 
 `Dockerfile` builds one image that runs `run_local.py` as its entrypoint, so the containerized process is the same bot + GSI API + Dota data API + daily updater bundle as the local run.
 
-`docker-compose.yml` runs that image as the `app` service, reads `.env` through `env_file`, publishes only port `8000` (the GSI endpoint — the Dota data API has no external consumer and stays container-internal), and mounts `./data` so SQLite and GSI logs survive rebuilds.
+`docker-compose.yml` runs that image as the `app` service, starts Redis as the `redis` service with its own named volume, reads `.env` through `env_file`, overrides `REDIS_URL` to `redis://redis:6379/0` for container networking, publishes only port `8000` (the GSI endpoint � the Dota data API has no external consumer and stays container-internal), and mounts `./data` so SQLite and GSI logs survive rebuilds.
 
-`docker-compose.redis.yml` is an optional overlay that adds a bundled `redis` service with its own volume, for running Redis on the same host:
+Start the full local stack with:
 
 ```text
-docker compose -f docker-compose.yml -f docker-compose.redis.yml up -d --build
+docker compose up -d --build
 ```
 
-Set `REDIS_URL=redis://redis:6379/0` in `.env` when using this overlay. To use an external/managed Redis instead, run `docker compose up -d --build` without the overlay and point `REDIS_URL` at that external host — no code change either way, since `RedisConfig.redis_url` is already read from the environment.
+Keep `REDIS_URL=redis://localhost:6379/0` in `.env` for direct host runs. Docker Compose overrides it with `redis://redis:6379/0` so the app container connects to the bundled Redis service.
 
 For a server deployment, also set `GSI_HOST=0.0.0.0` and `GSI_PUBLIC_URL` to the server's public address, and open the GSI port in the server firewall.
 

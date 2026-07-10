@@ -3,10 +3,23 @@ services:
     build: .
     env_file:
       - .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
     ports:
       # Only the GSI endpoint needs to be reachable from outside the container.
       - "8000:8000"
     volumes:
       # Keep SQLite data and raw GSI logs on the host across rebuilds.
       - ./data:/app/data
+    depends_on:
+      - redis
     restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+
+volumes:
+  redis-data:

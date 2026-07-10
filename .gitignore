@@ -6,11 +6,11 @@
 .vscode/
 __pycache__/
 
-/data/user_settings.db-journal
-/data/user_settings.db-shm
-/data/user_settings.db-wal
+/data/dot_ai_buff_bot.db-journal
+/data/dot_ai_buff_bot.db-shm
+/data/dot_ai_buff_bot.db-wal
 /bybit_delistings_log.txt
-/data/user_settings.db
+/data/dot_ai_buff_bot.db
 /data/gsi_snapshots/
 /data/popular_tickers.json
 /user_log.txt

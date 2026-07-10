@@ -4,7 +4,7 @@ import aiosqlite
 
 
 DATA_DIR = Path('data')
-DB_PATH = DATA_DIR / 'user_settings.db'
+DB_PATH = DATA_DIR / 'dot_ai_buff_bot.db'
 
 
 class Database:
