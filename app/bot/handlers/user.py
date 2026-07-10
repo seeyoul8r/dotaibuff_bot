@@ -11,6 +11,7 @@ from app.services.game_advisor_service import game_advisor_service
 
 user_router = Router()
 GET_GSI_CONFIG = 'get_gsi_config'
+WHAT_IS_GSI_CONFIG = 'what_is_gsi_config'
 GET_AI_ADVICE = 'get_ai_advice'
 CHANGE_LANGUAGE = 'change_language'
 
@@ -39,6 +40,15 @@ async def send_gsi_config(callback: CallbackQuery):
         document=config_file,
         caption=mes_user[lang].gsi_config_caption
     )
+    await callback.answer()
+
+
+@user_router.callback_query(lambda callback: callback.data == WHAT_IS_GSI_CONFIG)
+async def explain_gsi_config(callback: CallbackQuery):
+    """Explain GSI config setup."""
+    lang = await user_repository.get_user_lang(callback.from_user.id)
+    # Send localized GSI setup instructions without changing the menu.
+    await callback.message.answer(text=mes_user[lang].gsi_config_info)
     await callback.answer()
 
 

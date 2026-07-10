@@ -13,7 +13,8 @@ DotAIBuffBot is a Telegram bot plus local FastAPI service for collecting Dota 2 
 7. `MatchService` coordinates snapshot processing.
 8. Raw snapshots are temporarily saved to JSONL files for development analysis.
 9. `MatchStateService` updates the normalized internal match state in Redis.
-10. The recommendation button currently returns a short snapshot summary. Later it should use normalized match state plus Dota context for AI.
+10. `DotaDataService` collects OpenDota data on startup and then once per day.
+11. The recommendation button returns a summary of normalized match state. The future AI prompt combines that state with relevant OpenDota context.
 
 ## Main Components
 
@@ -45,7 +46,7 @@ Coordinates each incoming snapshot:
 Temporary development logger. It appends every raw snapshot to:
 
 ```text
-data/gsi_snapshots/{user_id}_{match_id}.jsonl
+data/gsi_snapshots/{session_id}_{user_id}_{match_id}.jsonl
 ```
 
 Each line is one JSON object with `saved_at`, `user_id`, `match_id`, and raw `payload`. These files are for analysis only and are ignored by Git.
@@ -62,6 +63,14 @@ Current state shape:
   "match_id": 0,
   "game_state": "DOTA_GAMERULES_STATE_STRATEGY_TIME",
   "game_time": 47,
+  "clock_time": -2,
+  "radiant_score": 0,
+  "dire_score": 0,
+  "player": {},
+  "hero": {},
+  "abilities": {},
+  "items": {},
+  "buildings": {},
   "radiant": {"heroes": {}},
   "dire": {"heroes": {}},
   "unknown_heroes": {},
@@ -73,16 +82,46 @@ Current state shape:
 Current hero sources:
 
 - local player hero from `hero.name` and `player.team_name`;
-- visible minimap heroes from `minimap[*].unitname`;
-- `minimap.team == 2` is treated as radiant;
-- `minimap.team == 3` is treated as dire;
-- unknown team ids go to `unknown_heroes`.
+- allied heroes from `minimap_herocircle`, `minimap_herocircle_self`, and `minimap_heroinvis`;
+- enemy heroes from `minimap_enemyicon`;
+- `minimap_plaincircle` is ignored because hero-selection snapshots assign noisy team ids;
+- the last reliable visible position is stored for each minimap hero.
 
-This minimap team mapping is still experimental. Saved JSONL snapshots should be used to verify it before relying on it for AI.
+The latest real-match replay produced an exact 5v5 composition with these rules. Enemy data remains limited to information visible to the local player.
 
 `app/services/game_advisor_service.py`
 
-Current preview implementation. It formats the latest raw snapshot. The intended next step is to use `MatchState` instead of raw GSI payload.
+Current preview implementation formats accumulated `MatchState`. `build_prompt()` combines it with only match-relevant OpenDota hero stats, items, abilities, latest patch metadata, and patch notes.
+
+`app/services/dota_data_service.py`
+
+Collects external Dota data from OpenDota and keeps it in memory. It updates once on startup and then once per day.
+
+Current OpenDota endpoints:
+
+```text
+/heroStats
+/constants/heroes
+/constants/items
+/constants/abilities
+/constants/patch
+```
+
+OpenDota requires a non-default `User-Agent`; the service sends `DotAIBuffBot/0.1`.
+
+`app/dota_data_api.py`
+
+Separate FastAPI app for collected Dota data. It exposes:
+
+```text
+GET /dota-data
+```
+
+Local port in `run_local.py`:
+
+```text
+127.0.0.1:8001
+```
 
 `app/bot/messages`
 
@@ -137,6 +176,8 @@ updated_at
 - main Telegram bot;
 - admin Telegram bot;
 - FastAPI GSI endpoint on `127.0.0.1:8000`.
+- FastAPI Dota data endpoint on `127.0.0.1:8001`.
+- daily OpenDota data updater.
 
 Before local services start, `prepare_runtime()` creates SQLite tables. If `CLEAR_GSI_STATE_ON_START=1`, it deletes Redis keys matching `gsi:*`. This is a temporary development setting to avoid mixing test matches when Dota reports `match_id = 0`.
 
@@ -170,18 +211,41 @@ wearables
 
 Observed behavior so far:
 
-- `draft` exists but can be empty;
-- `allplayers` may not arrive;
-- `minimap` can contain hero unit names before or around strategy time;
+- `draft` was empty in recorded bot and real matches;
+- `allplayers` did not arrive in recorded matches;
+- full abilities and items are available only for the local player;
+- minimap markers expose allied heroes and currently visible enemy heroes;
+- buildings currently contain only the local player's side;
 - raw snapshots are currently the best way to verify what Dota actually sends.
+
+## Dota Data API
+
+The Dota data service currently stores data in memory only. Endpoint response shape:
+
+```json
+{
+  "updated_at": "...",
+  "is_ready": true,
+  "hero_stats": [],
+  "heroes": {},
+  "items": {},
+  "abilities": {},
+  "patches": [],
+  "latest_patch": {},
+  "patch_notes": {}
+}
+```
+
+OpenDota provides patch metadata through `constants/patch`, but not full patch note text in the currently used endpoints. `patch_notes` is kept as a separate block for the future patch notes source.
 
 ## Current Limitations
 
 - `match_id = 0` in test games causes different test matches to share the same Redis key unless `gsi:*` is cleared.
-- Minimap team ids need more validation. Some strategy-time snapshots can assign many heroes to one team.
+- Enemy items, abilities, and complete player statistics are not available through the recorded GSI payloads.
+- Match completion and per-match Redis cleanup are not implemented yet.
 - The recommendation button does not call AI yet.
 - Raw snapshot logging is temporary and should become optional debug behavior later.
 
 ## Next Architecture Step
 
-Use `MatchState` as the main AI input instead of the latest raw snapshot. The AI payload should contain compact, normalized data: current stage, player hero, likely teams, abilities, items, buildings, visible map entities, and known uncertainty.
+Add the real AI client and prompt execution, then derive important match events such as level-ups, item purchases, deaths, buybacks, and destroyed buildings from successive `MatchState` updates.

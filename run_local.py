@@ -6,14 +6,24 @@ import uvicorn
 
 from app.bot.main import start_admin_bot, start_bot
 from app.cache.redis_cache import redis_cache, redis_config
+from app.dota_data_api import dota_data_app
 from app.main import app
 from app.models.database import db
+from app.services.dota_data_service import dota_data_service
 
 
 async def start_gsi():
     """Start local GSI API server."""
     # Run FastAPI server inside the same local event loop.
     config = uvicorn.Config(app=app, host='127.0.0.1', port=8000, log_level='info')
+    server = uvicorn.Server(config)
+    await server.serve()
+
+
+async def start_dota_data_api():
+    """Start local Dota data API server."""
+    # Run Dota data API on a separate local port.
+    config = uvicorn.Config(app=dota_data_app, host='127.0.0.1', port=8001, log_level='info')
     server = uvicorn.Server(config)
     await server.serve()
 
@@ -34,9 +44,11 @@ def main_process():
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     loop.run_until_complete(prepare_runtime())
+    loop.create_task(dota_data_service.start_daily_update())
     loop.create_task(start_bot())
     loop.create_task(start_admin_bot())
     loop.create_task(start_gsi())
+    loop.create_task(start_dota_data_api())
     loop.run_forever()
 
 
