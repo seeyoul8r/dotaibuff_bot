@@ -267,22 +267,22 @@ GEMINI_API_KEY=...
 GEMINI_MODEL=gemini-3-flash-preview
 GEMINI_THINKING_LEVEL=low
 AI_ADVICE_COOLDOWN=180
-GSI_HOST=127.0.0.1
+GSI_HOST=0.0.0.0
 GSI_PORT=8000
-GSI_PUBLIC_URL=http://127.0.0.1:8000/gsi
+GSI_PUBLIC_URL=http://193.42.60.48/gsi
 DOTA_DATA_HOST=127.0.0.1
 DOTA_DATA_PORT=8001
 ```
 
 `GSI_HOST`/`GSI_PORT`/`DOTA_DATA_HOST`/`DOTA_DATA_PORT` and `GSI_PUBLIC_URL` all default to the values above, so an `.env` without them keeps today's local-only behavior unchanged.
 
-`GSI_PUBLIC_URL` is written into the `.cfg` file `ClientLinkService.build_gsi_config()` generates â€” it is the address the Dota 2 client itself sends snapshots to, so it must be reachable from the player's machine. On a server this has to be the server's public IP or domain (e.g. `http://203.0.113.10:8000/gsi`), not `127.0.0.1`.
+`GSI_PUBLIC_URL` is written into the `.cfg` file `ClientLinkService.build_gsi_config()` generates — it is the address the Dota 2 client itself sends snapshots to, so it must be reachable from the player's machine. On a server behind Caddy this should be the public IP or domain without the internal FastAPI port, for example `http://193.42.60.48/gsi`.
 
 ## Docker
 
 `Dockerfile` builds one image that runs `run_local.py` as its entrypoint, so the containerized process is the same bot + GSI API + Dota data API + daily updater bundle as the local run.
 
-`docker-compose.yml` runs that image as the `app` service, starts Redis as the `redis` service with its own named volume, reads `.env` through `env_file`, overrides `REDIS_URL` to `redis://redis:6379/0` for container networking, publishes only port `8000` (the GSI endpoint — the Dota data API has no external consumer and stays container-internal), and mounts `./data` so SQLite and GSI logs survive rebuilds.
+`docker-compose.yml` runs that image as the `app` service, starts Redis as the `redis` service with its own named volume, reads `.env` through `env_file`, overrides `REDIS_URL` to `redis://redis:6379/0` for container networking, binds FastAPI to `127.0.0.1:8000` for Caddy, publishes no public FastAPI port, and mounts `./data` so SQLite and GSI logs survive rebuilds.
 
 Start the full local stack with:
 
@@ -292,7 +292,7 @@ docker compose up -d --build
 
 Keep `REDIS_URL=redis://localhost:6379/0` in `.env` for direct host runs. Docker Compose overrides it with `redis://redis:6379/0` so the app container connects to the bundled Redis service.
 
-For a server deployment, also set `GSI_HOST=0.0.0.0` and `GSI_PUBLIC_URL` to the server's public address, and open the GSI port in the server firewall.
+For a server deployment, also set `GSI_HOST=0.0.0.0`, set `GSI_PUBLIC_URL` to the Caddy public address, and route `/gsi*` from Caddy to `localhost:8000`.
 
 The generated GSI config currently requests:
 
