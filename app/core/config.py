@@ -42,6 +42,11 @@ class ServerConfig:
     dota_data_port: int
 
 
+@dataclass
+class StratzConfig:
+    api_token: str
+
+
 def load_config(path: str | None = None) -> Config:
     """Read main bot config from environment."""
     env = Env()
@@ -94,3 +99,10 @@ def load_server_config(path: str | None = None) -> ServerConfig:
         dota_data_host=env.str('DOTA_DATA_HOST', '127.0.0.1'),
         dota_data_port=env.int('DOTA_DATA_PORT', 8001)
     )
+
+
+def load_stratz_config(path: str | None = None) -> StratzConfig:
+    """Read STRATZ API config from environment."""
+    env = Env()
+    env.read_env(path)
+    return StratzConfig(api_token=env('STRATZ_API_TOKEN'))

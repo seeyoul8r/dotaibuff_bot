@@ -134,9 +134,17 @@ Defines the structured `GameAdvice` response with `macro_gaming`, `build`, and `
 
 Sends admin-bot notifications when Dota data updates start, complete, or fail. The manual admin update button uses the same `update_data()` flow as the daily updater.
 
-Collects external Dota data from OpenDota and dota2.com datafeed and keeps it in memory. It updates once on startup and then once per day.
+Collects external Dota data from OpenDota, dota2.com datafeed, and the STRATZ GraphQL API, and keeps it in memory. It updates once on startup and then once per day.
 
-Every update prints start and completion messages to the console. The completion message includes hero, item, and ability counts plus the latest patch name.
+Every update prints start and completion messages to the console. The completion message includes hero, item, and ability counts plus the latest patch name and STRATZ record counts.
+
+`fetch_all_stratz_data()` sends one combined GraphQL query per hero (`STRATZ_HERO_QUERY`) to `https://api.stratz.com/graphql`, authenticated with `STRATZ_API_TOKEN`. It builds:
+
+- `hero_win_rates`: per hero, win/match count for the most recent `gameVersionId` (current patch).
+- `hero_counters`: per hero, a map of opponent hero name to `win_rate`/`synergy`/`match_count`, read from `heroVsHeroMatchup(heroId, take: 150).advantage[0].vs` — a large `take` returns the full sorted list in one call instead of only the top/bottom entries.
+- `hero_builds`: per hero, `starting_items`, `core_items`, `ability_min_level`, `ability_max_level`, and `talents`, each a list with one representative (highest match count) row per item/ability, sorted by match count. `normalize_stratz_rows()` does this deduplication and maps STRATZ numeric ids to GSI names using the same `id` fields already loaded from OpenDota constants.
+
+STRATZ queries use no rank bracket or position filter yet (all-bracket aggregate) to keep the integration minimal; the query already accepts `bracketBasicIds`/`positionIds` if per-rank filtering is added later. About 124 GraphQL calls run per update cycle, well under STRATZ's per-hour rate limit.
 
 Current OpenDota endpoints:
 
@@ -246,10 +254,15 @@ gsi:match_state:{user_id}:{match_id}
     "patch": {},
     "heroes": {},
     "hero_mechanics": {},
-    "local_items": {}
+    "local_items": {},
+    "hero_win_rates": {},
+    "local_hero_counters": {},
+    "local_hero_builds": {}
   }
 }
 ```
+
+`hero_win_rates` covers every hero in the match roster. `local_hero_counters` and `local_hero_builds` are scoped to the local hero only: counters are filtered to the current enemy lineup, and builds are the local hero's own STRATZ item/ability/talent data — matching how `local_items` already scopes mechanics to the local inventory.
 
 5. `GameAdvisorService.request_advice()` serializes the contents once and, when enabled, writes the exact request fields to `data/ai_requests`.
 6. The service sends the JSON and `GAME_ADVISOR_PROMPT` to `gemini-3.5-flash` with the configured thinking level.
@@ -323,7 +336,10 @@ GSI_PORT=8000
 GSI_PUBLIC_URL=http://193.42.60.48/gsi
 DOTA_DATA_HOST=127.0.0.1
 DOTA_DATA_PORT=8001
+STRATZ_API_TOKEN=Bearer ...
 ```
+
+`STRATZ_API_TOKEN` is the Bearer token from a STRATZ account API key (`stratz.com`, logged in via Steam) and must include the `Bearer ` prefix — `DotaDataService` sends it as-is in the `Authorization` header.
 
 `LOG_REQUESTS=1` enables both sanitized GSI snapshot files and exact AI request files. Set it to `0` to disable both file writers. The value is read on process startup.
 
@@ -391,6 +407,9 @@ The Dota data service currently stores data in memory only. Endpoint response sh
   "heroes": {},
   "items": {},
   "abilities": {},
+  "hero_win_rates": {},
+  "hero_counters": {},
+  "hero_builds": {},
   "patches": [],
   "patch": {
     "metadata": {},
@@ -409,6 +428,7 @@ OpenDota provides patch metadata through `constants/patch`, but not full patch n
 - AI recommendations require a valid `GEMINI_API_KEY` and current accumulated match state.
 - The recommendation cooldown is local to one bot process and is not shared through Redis.
 - Request log files are development artifacts and can grow until they are removed manually.
+- STRATZ data (`hero_win_rates`/`hero_counters`/`hero_builds`) is an all-bracket, all-position aggregate; rank/role filtering is not implemented yet.
 
 ## Next Architecture Step
 

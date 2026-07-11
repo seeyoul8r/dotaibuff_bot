@@ -6,12 +6,62 @@ import urllib.request
 from urllib.parse import urlencode
 from datetime import UTC, datetime
 
+from app.core.config import StratzConfig, load_stratz_config
+
 
 OPENDOTA_BASE_URL = 'https://api.opendota.com/api'
 DOTA2_DATAFEED_BASE_URL = 'https://www.dota2.com/datafeed'
 DOTA2_DATAFEED_LANGUAGE = 'english'
+STRATZ_GRAPHQL_URL = 'https://api.stratz.com/graphql'
 DOTA_DATA_UPDATE_INTERVAL = 60 * 60 * 24
 logger = logging.getLogger(__name__)
+
+# One combined query per hero keeps STRATZ calls at one per hero per update cycle.
+STRATZ_HERO_QUERY = '''
+query HeroStratzData($heroId: Short!) {
+  heroStats {
+    winGameVersion(heroIds: [$heroId], take: 1) {
+      gameVersionId
+      winCount
+      matchCount
+    }
+    heroVsHeroMatchup(heroId: $heroId, take: 150) {
+      advantage {
+        vs { heroId2 synergy winRateHeroId1 matchCount }
+      }
+    }
+    itemStartingPurchase(heroId: $heroId) {
+      itemId
+      wasGiven
+      matchCount
+      winsAverage
+    }
+    itemFullPurchase(heroId: $heroId) {
+      itemId
+      time
+      matchCount
+      winsAverage
+    }
+    abilityMinLevel(heroId: $heroId) {
+      abilityId
+      level
+      matchCount
+      winCount
+    }
+    abilityMaxLevel(heroId: $heroId) {
+      abilityId
+      level
+      matchCount
+      winCount
+    }
+    talent(heroId: $heroId) {
+      abilityId
+      matchCount
+      winsAverage
+    }
+  }
+}
+'''
 
 
 class DotaDataService:
@@ -30,6 +80,10 @@ class DotaDataService:
         self.datafeed_items = {}
         self.hero_mechanics = {}
         self.item_mechanics = {}
+        self.hero_win_rates = {}
+        self.hero_counters = {}
+        self.hero_builds = {}
+        self.stratz_config: StratzConfig = load_stratz_config()
         self.admin_update_notifier = None
 
     async def start_daily_update(self):
@@ -86,6 +140,7 @@ class DotaDataService:
             }
             self.hero_mechanics = await self.fetch_all_hero_mechanics()
             self.item_mechanics = {}
+            self.hero_win_rates, self.hero_counters, self.hero_builds = await self.fetch_all_stratz_data()
             self.updated_at = datetime.now(UTC).isoformat()
             self.is_ready = True
             duration = time.monotonic() - started_at
@@ -94,7 +149,9 @@ class DotaDataService:
                 f'OpenDota: heroes={len(self.heroes)}, items={len(self.items)}, '
                 f'abilities={len(self.abilities)}, patch={self.latest_patch["name"]}\n'
                 f'Dota2 datafeed: hero_mechanics={len(self.hero_mechanics)}, '
-                f'item_list={len(self.datafeed_items)}'
+                f'item_list={len(self.datafeed_items)}\n'
+                f'STRATZ: hero_win_rates={len(self.hero_win_rates)}, hero_counters={len(self.hero_counters)}, '
+                f'hero_builds={len(self.hero_builds)}'
             )
             logger.info(completed_message)
             await self.notify_admins(completed_message)
@@ -115,6 +172,9 @@ class DotaDataService:
             'datafeed_items': self.datafeed_items,
             'hero_mechanics': self.hero_mechanics,
             'item_mechanics': self.item_mechanics,
+            'hero_win_rates': self.hero_win_rates,
+            'hero_counters': self.hero_counters,
+            'hero_builds': self.hero_builds,
             'patches': self.patches,
             'patch': {
                 'metadata': self.latest_patch,
@@ -182,6 +242,114 @@ class DotaDataService:
             for item_name in item_names
             if item_name in self.item_mechanics
         }
+
+    async def fetch_stratz_json(self, query: str, variables: dict):
+        """Fetch JSON data from STRATZ GraphQL API."""
+        return await asyncio.to_thread(self.fetch_stratz_json_sync, query, variables)
+
+    def fetch_stratz_json_sync(self, query: str, variables: dict):
+        """Fetch STRATZ GraphQL JSON in blocking mode."""
+        body = json.dumps({'query': query, 'variables': variables}).encode('utf-8')
+        request = urllib.request.Request(
+            STRATZ_GRAPHQL_URL,
+            data=body,
+            headers={
+                'User-Agent': 'DotAIBuffBot/0.1',
+                'Content-Type': 'application/json',
+                # The configured token already includes the required "Bearer " prefix.
+                'Authorization': self.stratz_config.api_token
+            }
+        )
+        with urllib.request.urlopen(request, timeout=30) as response:
+            return json.loads(response.read().decode('utf-8'))
+
+    async def fetch_all_stratz_data(self):
+        """Fetch STRATZ win rate, counter, and build data for every hero."""
+        hero_id_to_name = {hero['definition']['id']: gsi_name for gsi_name, hero in self.heroes.items()}
+        item_id_to_name = {item['id']: item_key for item_key, item in self.items.items()}
+        ability_id_to_name = {ability['id']: ability_key for ability_key, ability in self.abilities.items()}
+
+        hero_win_rates = {}
+        hero_counters = {}
+        hero_builds = {}
+        heroes = list(hero_id_to_name.items())
+        for index, (hero_id, gsi_name) in enumerate(heroes, start=1):
+            response = await self.fetch_stratz_json(STRATZ_HERO_QUERY, {'heroId': hero_id})
+            hero_stats = response['data']['heroStats']
+
+            # winGameVersion returns one row per patch, most recent first.
+            version_rows = hero_stats['winGameVersion']
+            if version_rows:
+                version_row = version_rows[0]
+                match_count = version_row['matchCount']
+                hero_win_rates[gsi_name] = {
+                    'game_version_id': version_row['gameVersionId'],
+                    'match_count': match_count,
+                    'win_rate': version_row['winCount'] / match_count if match_count else None
+                }
+
+            # advantage[0].vs is the full counter list sorted by synergy; take:150 covers every hero.
+            counters = {}
+            matchup_rows = hero_stats['heroVsHeroMatchup']['advantage']
+            if matchup_rows:
+                for opponent in matchup_rows[0]['vs']:
+                    opponent_name = hero_id_to_name.get(opponent['heroId2'])
+                    if opponent_name:
+                        counters[opponent_name] = {
+                            'win_rate': opponent['winRateHeroId1'],
+                            'synergy': opponent['synergy'],
+                            'match_count': opponent['matchCount']
+                        }
+            hero_counters[gsi_name] = counters
+
+            hero_builds[gsi_name] = {
+                'starting_items': self.normalize_stratz_rows(
+                    hero_stats['itemStartingPurchase'], 'itemId', item_id_to_name, 'item',
+                    extra_fields={'was_given': 'wasGiven'}
+                ),
+                'core_items': self.normalize_stratz_rows(
+                    hero_stats['itemFullPurchase'], 'itemId', item_id_to_name, 'item',
+                    extra_fields={'time_seconds': 'time'}
+                ),
+                'ability_min_level': self.normalize_stratz_rows(
+                    hero_stats['abilityMinLevel'], 'abilityId', ability_id_to_name, 'ability',
+                    extra_fields={'level': 'level'}
+                ),
+                'ability_max_level': self.normalize_stratz_rows(
+                    hero_stats['abilityMaxLevel'], 'abilityId', ability_id_to_name, 'ability',
+                    extra_fields={'level': 'level'}
+                ),
+                'talents': self.normalize_stratz_rows(hero_stats['talent'], 'abilityId', ability_id_to_name, 'talent')
+            }
+            if index % 25 == 0 or index == len(heroes):
+                logger.info(f'STRATZ hero data loading: {index}/{len(heroes)}')
+        return hero_win_rates, hero_counters, hero_builds
+
+    def normalize_stratz_rows(self, rows: list, id_field: str, id_map: dict, name_key: str, extra_fields: dict | None = None):
+        """Return one representative row per STRATZ id, mapped to a GSI name and sorted by match count."""
+        best_rows = {}
+        for row in rows:
+            name = id_map.get(row.get(id_field))
+            if name is None:
+                continue
+            # Keep the most common row per id (highest match count) to stay compact.
+            if name not in best_rows or row.get('matchCount', 0) > best_rows[name].get('matchCount', 0):
+                best_rows[name] = row
+
+        normalized = []
+        for name, row in best_rows.items():
+            match_count = row.get('matchCount') or 0
+            wins_average = row.get('winsAverage')
+            win_count = row.get('winCount')
+            win_rate = wins_average if wins_average is not None else (
+                win_count / match_count if match_count and win_count is not None else None
+            )
+            entry = {name_key: name, 'match_count': match_count, 'win_rate': win_rate}
+            for target_key, source_key in (extra_fields or {}).items():
+                entry[target_key] = row.get(source_key)
+            normalized.append(entry)
+        normalized.sort(key=lambda entry: entry['match_count'], reverse=True)
+        return normalized
 
     def normalize_hero_mechanics(self, hero: dict):
         """Return compact hero mechanics for AI context."""

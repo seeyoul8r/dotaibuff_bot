@@ -33,6 +33,18 @@ class GameAdvisorService:
         item_names = {item['name'] for item in match_state['items'].values()}
         item_mechanics = await dota_data_service.get_item_mechanics(item_names)
 
+        # Only the local hero's counters against the current enemy lineup are relevant.
+        local_hero_name = match_state['hero'].get('name')
+        local_team_name = match_state['player'].get('team_name')
+        opponent_team_name = {'radiant': 'dire', 'dire': 'radiant'}.get(local_team_name)
+        enemy_hero_names = set(match_state[opponent_team_name]['heroes']) if opponent_team_name else set()
+        local_hero_counters = dota_data['hero_counters'].get(local_hero_name, {})
+        relevant_counters = {
+            enemy_hero_name: local_hero_counters[enemy_hero_name]
+            for enemy_hero_name in enemy_hero_names
+            if enemy_hero_name in local_hero_counters
+        }
+
         # Send only match-relevant mechanics and avoid lore or unrelated heroes.
         dota_context = {
             'updated_at': dota_data['updated_at'],
@@ -51,7 +63,14 @@ class GameAdvisorService:
                 item_name: item_mechanics[item_name]
                 for item_name in item_names
                 if item_name in item_mechanics
-            }
+            },
+            'hero_win_rates': {
+                hero_name: dota_data['hero_win_rates'][hero_name]
+                for hero_name in hero_names
+                if hero_name in dota_data['hero_win_rates']
+            },
+            'local_hero_counters': relevant_counters,
+            'local_hero_builds': dota_data['hero_builds'].get(local_hero_name, {})
         }
         return {
             'language': 'Russian' if lang == 'ru' else 'English',
