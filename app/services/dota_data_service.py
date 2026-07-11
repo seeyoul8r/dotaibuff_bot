@@ -80,6 +80,7 @@ class DotaDataService:
         self.datafeed_items = {}
         self.hero_mechanics = {}
         self.item_mechanics = {}
+        self.ability_ids = {}
         self.hero_win_rates = {}
         self.hero_counters = {}
         self.hero_builds = {}
@@ -103,10 +104,13 @@ class DotaDataService:
             heroes = await self.fetch_opendota_json('/constants/heroes')
             items = await self.fetch_opendota_json('/constants/items')
             abilities = await self.fetch_opendota_json('/constants/abilities')
+            # /constants/abilities has no numeric id; ability_ids is the id->name lookup STRATZ ids need.
+            ability_ids = await self.fetch_opendota_json('/constants/ability_ids')
             patches = await self.fetch_opendota_json('/constants/patch')
             logger.info(
                 f'OpenDota data loaded: heroes={len(heroes)}, items={len(items)}, '
-                f'abilities={len(abilities)}, patch={patches[-1]["name"] if patches else None}'
+                f'abilities={len(abilities)}, ability_ids={len(ability_ids)}, '
+                f'patch={patches[-1]["name"] if patches else None}'
             )
             datafeed_heroes = await self.fetch_dota2_datafeed_json('/herolist')
             datafeed_items = await self.fetch_dota2_datafeed_json('/itemlist')
@@ -127,6 +131,7 @@ class DotaDataService:
             }
             self.items = items
             self.abilities = abilities
+            self.ability_ids = ability_ids
             self.patches = patches
             self.latest_patch = patches[-1] if patches else None
             self.patch_notes = {}
@@ -267,7 +272,8 @@ class DotaDataService:
         """Fetch STRATZ win rate, counter, and build data for every hero."""
         hero_id_to_name = {hero['definition']['id']: gsi_name for gsi_name, hero in self.heroes.items()}
         item_id_to_name = {item['id']: item_key for item_key, item in self.items.items()}
-        ability_id_to_name = {ability['id']: ability_key for ability_key, ability in self.abilities.items()}
+        # ability_ids (not self.abilities) is the OpenDota resource that carries numeric ability ids.
+        ability_id_to_name = {int(ability_id): name for ability_id, name in self.ability_ids.items()}
 
         hero_win_rates = {}
         hero_counters = {}

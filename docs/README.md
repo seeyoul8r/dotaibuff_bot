@@ -142,7 +142,9 @@ Every update prints start and completion messages to the console. The completion
 
 - `hero_win_rates`: per hero, win/match count for the most recent `gameVersionId` (current patch).
 - `hero_counters`: per hero, a map of opponent hero name to `win_rate`/`synergy`/`match_count`, read from `heroVsHeroMatchup(heroId, take: 150).advantage[0].vs` — a large `take` returns the full sorted list in one call instead of only the top/bottom entries.
-- `hero_builds`: per hero, `starting_items`, `core_items`, `ability_min_level`, `ability_max_level`, and `talents`, each a list with one representative (highest match count) row per item/ability, sorted by match count. `normalize_stratz_rows()` does this deduplication and maps STRATZ numeric ids to GSI names using the same `id` fields already loaded from OpenDota constants.
+- `hero_builds`: per hero, `starting_items`, `core_items`, `ability_min_level`, `ability_max_level`, and `talents`, each a list with one representative (highest match count) row per item/ability, sorted by match count. `normalize_stratz_rows()` does this deduplication and maps STRATZ numeric ids to names: items use the `id` field already loaded from OpenDota `/constants/items`; abilities use `/constants/ability_ids` (a separate id→name resource — `/constants/abilities` itself has no numeric id field).
+
+Ability names from `ability_ids` occasionally use an older internal codename than the one Dota GSI reports for the same ability (for example Warlock's abilities are `greevil_*` in OpenDota constants but `warlock_*` in live GSI payloads). This is a pre-existing OpenDota/GSI naming mismatch, not introduced by the STRATZ integration — `hero_builds` ability entries can end up keyed differently than `match_state.abilities` for the handful of heroes affected.
 
 STRATZ queries use no rank bracket or position filter yet (all-bracket aggregate) to keep the integration minimal; the query already accepts `bracketBasicIds`/`positionIds` if per-rank filtering is added later. About 124 GraphQL calls run per update cycle, well under STRATZ's per-hour rate limit.
 
@@ -153,6 +155,7 @@ Current OpenDota endpoints:
 /constants/heroes
 /constants/items
 /constants/abilities
+/constants/ability_ids
 /constants/patch
 
 Dota 2 datafeed endpoints used for current mechanics:
