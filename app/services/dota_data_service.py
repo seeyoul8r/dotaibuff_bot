@@ -300,7 +300,8 @@ class DotaDataService:
 
             # advantage[0].vs is the full counter list sorted by synergy; take:150 covers every hero.
             counters = {}
-            matchup_rows = hero_stats['heroVsHeroMatchup']['advantage']
+            matchup = hero_stats.get('heroVsHeroMatchup') or {}
+            matchup_rows = matchup.get('advantage')
             if matchup_rows:
                 for opponent in matchup_rows[0]['vs']:
                     opponent_name = hero_id_to_name.get(opponent['heroId2'])
@@ -338,7 +339,8 @@ class DotaDataService:
     def normalize_stratz_rows(self, rows: list, id_field: str, id_map: dict, name_key: str, extra_fields: dict | None = None):
         """Return one representative row per STRATZ id, mapped to a GSI name and sorted by match count."""
         best_rows = {}
-        for row in rows:
+        # STRATZ returns null instead of [] for some heroes with too little match data.
+        for row in rows or []:
             name = id_map.get(row.get(id_field))
             if name is None:
                 continue
