@@ -258,6 +258,7 @@ class DotaDataService:
 
     async def get_item_mechanics(self, item_names: set[str]):
         """Return mechanics for requested item names."""
+        loaded_new_items = False
         for item_name in item_names:
             if item_name in self.item_mechanics or item_name not in self.datafeed_items:
                 continue
@@ -266,7 +267,11 @@ class DotaDataService:
             for item_detail in item_data['result']['data']['items']:
                 # Cache only requested item data and avoid loading every item on startup.
                 self.item_mechanics[item_detail['name']] = self.normalize_ability_or_item(item_detail)
+                loaded_new_items = True
                 logger.info(f'Dota 2 item mechanics loaded: {item_detail["name"]}')
+        if loaded_new_items:
+            # Persist lazily loaded item mechanics so future restarts can reuse them.
+            self.save_cache()
         return {
             item_name: self.item_mechanics[item_name]
             for item_name in item_names

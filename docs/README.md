@@ -157,6 +157,7 @@ Current OpenDota endpoints:
 /constants/abilities
 /constants/ability_ids
 /constants/patch
+```
 
 Dota 2 datafeed endpoints used for current mechanics:
 
@@ -170,8 +171,6 @@ Dota 2 datafeed endpoints used for current mechanics:
 Hero mechanics are loaded from cache or fetched on startup, and refreshed only by the admin update button. Item mechanics are loaded lazily for items present in the local player inventory and are also persisted in the cache file. The AI context uses English mechanics data and only the final answer language is localized.
 
 `data/dota_data_cache.json` holds every field listed in `CACHE_FIELDS` (heroes, items, abilities, ability_ids, patches, datafeed data, hero_mechanics, item_mechanics, hero_win_rates, hero_counters, hero_builds, updated_at) as one JSON object — a full in-memory snapshot, not an append log. It is gitignored; delete it to force a full re-fetch on the next restart.
-```
-
 OpenDota requires a non-default `User-Agent`; the service sends `DotAIBuffBot/0.1`.
 
 Runtime storage is indexed by GSI names:
