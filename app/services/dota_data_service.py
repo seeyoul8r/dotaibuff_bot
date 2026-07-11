@@ -3,6 +3,7 @@ import json
 import logging
 import time
 import urllib.request
+from pathlib import Path
 from urllib.parse import urlencode
 from datetime import UTC, datetime
 
@@ -13,8 +14,15 @@ OPENDOTA_BASE_URL = 'https://api.opendota.com/api'
 DOTA2_DATAFEED_BASE_URL = 'https://www.dota2.com/datafeed'
 DOTA2_DATAFEED_LANGUAGE = 'english'
 STRATZ_GRAPHQL_URL = 'https://api.stratz.com/graphql'
-DOTA_DATA_UPDATE_INTERVAL = 60 * 60 * 24
+DOTA_DATA_CACHE_PATH = Path('data/dota_data_cache.json')
 logger = logging.getLogger(__name__)
+
+# Fields saved to and restored from the local cache file, in addition to the derived get_data() shape.
+CACHE_FIELDS = (
+    'hero_stats', 'heroes', 'items', 'abilities', 'ability_ids', 'patches', 'latest_patch',
+    'patch_notes', 'datafeed_heroes', 'datafeed_items', 'hero_mechanics', 'item_mechanics',
+    'hero_win_rates', 'hero_counters', 'hero_builds', 'updated_at'
+)
 
 # One combined query per hero keeps STRATZ calls at one per hero per update cycle.
 STRATZ_HERO_QUERY = '''
@@ -87,12 +95,28 @@ class DotaDataService:
         self.stratz_config: StratzConfig = load_stratz_config()
         self.admin_update_notifier = None
 
-    async def start_daily_update(self):
-        """Start daily Dota data update loop."""
+    async def load_startup_data(self):
+        """Load cached Dota data on startup, or fetch it once if no cache exists."""
+        if self.load_cache():
+            logger.info(f'Dota data loaded from cache: {DOTA_DATA_CACHE_PATH}')
+            return
         await self.update_data()
-        while True:
-            await asyncio.sleep(DOTA_DATA_UPDATE_INTERVAL)
-            await self.update_data()
+
+    def load_cache(self):
+        """Load collected Dota data from the local cache file. Returns False if no usable cache exists."""
+        if not DOTA_DATA_CACHE_PATH.exists() or DOTA_DATA_CACHE_PATH.stat().st_size == 0:
+            return False
+        cache_data = json.loads(DOTA_DATA_CACHE_PATH.read_text(encoding='utf-8'))
+        for field in CACHE_FIELDS:
+            setattr(self, field, cache_data[field])
+        self.is_ready = True
+        return True
+
+    def save_cache(self):
+        """Save collected Dota data to the local cache file."""
+        DOTA_DATA_CACHE_PATH.parent.mkdir(exist_ok=True)
+        cache_data = {field: getattr(self, field) for field in CACHE_FIELDS}
+        DOTA_DATA_CACHE_PATH.write_text(json.dumps(cache_data, ensure_ascii=False), encoding='utf-8')
 
     async def update_data(self):
         """Update all collected Dota data."""
@@ -148,6 +172,7 @@ class DotaDataService:
             self.hero_win_rates, self.hero_counters, self.hero_builds = await self.fetch_all_stratz_data()
             self.updated_at = datetime.now(UTC).isoformat()
             self.is_ready = True
+            self.save_cache()
             duration = time.monotonic() - started_at
             completed_message = (
                 f'Dota data update completed in {duration:.1f} sec.\n'

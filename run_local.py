@@ -59,7 +59,7 @@ def main_process():
     asyncio.set_event_loop(loop)
     loop.run_until_complete(prepare_runtime())
     dota_data_service.set_admin_update_notifier(notify_admins)
-    loop.create_task(dota_data_service.start_daily_update())
+    loop.create_task(dota_data_service.load_startup_data())
     loop.create_task(start_bot())
     loop.create_task(start_admin_bot())
     loop.create_task(start_gsi())

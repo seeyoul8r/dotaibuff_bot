@@ -13,6 +13,7 @@ __pycache__/
 /data/dot_ai_buff_bot.db
 /data/gsi_snapshots/
 /data/ai_requests/
+/data/dota_data_cache.json
 /data/popular_tickers.json
 /user_log.txt
 /error_log.txt

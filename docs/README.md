@@ -15,7 +15,7 @@ DotAIBuffBot is a Telegram bot plus local FastAPI service for collecting Dota 2 
 9. When `LOG_REQUESTS=1`, sanitized snapshots are saved to JSONL files for development analysis.
 10. `MatchStateService` updates the normalized internal match state in Redis.
    It locks the exact 5v5 roster from minimap positions when the local hero and at least 10 hero markers are visible: local hero plus the nearest 4 heroes are allies, and the next 5 heroes are enemies.
-11. `DotaDataService` collects OpenDota and dota2.com datafeed data on startup and then once per day.
+11. `DotaDataService` loads OpenDota, dota2.com datafeed, and STRATZ data from the local cache file on startup, or fetches it once if no cache exists yet.
 12. The recommendation button combines normalized match state with relevant Dota mechanics context and calls Gemini.
 13. When `LOG_REQUESTS=1`, the exact model request fields are written before the Gemini call.
 14. The bot sends macro gaming, build, and current micro gaming advice as three Telegram messages.
@@ -132,9 +132,9 @@ Defines the structured `GameAdvice` response with `macro_gaming`, `build`, and `
 
 `app/services/dota_data_service.py`
 
-Sends admin-bot notifications when Dota data updates start, complete, or fail. The manual admin update button uses the same `update_data()` flow as the daily updater.
+Sends admin-bot notifications when Dota data updates start, complete, or fail.
 
-Collects external Dota data from OpenDota, dota2.com datafeed, and the STRATZ GraphQL API, and keeps it in memory. It updates once on startup and then once per day.
+Collects external Dota data from OpenDota, dota2.com datafeed, and the STRATZ GraphQL API, and keeps it in memory. There is no automatic periodic refresh — `load_startup_data()` runs once at process start: if `data/dota_data_cache.json` exists and is non-empty, it loads straight from that file with no network calls (fast restarts, no API usage); otherwise it runs a full `update_data()` fetch and writes the cache. The admin `Update Dota data` button always calls `update_data()` directly, which re-fetches everything from the network and overwrites the cache file — this is the only way data refreshes after the first successful load.
 
 Every update prints start and completion messages to the console. The completion message includes hero, item, and ability counts plus the latest patch name and STRATZ record counts.
 
@@ -167,7 +167,9 @@ Dota 2 datafeed endpoints used for current mechanics:
 /datafeed/itemdata?language=english&item_id={item_id}
 ```
 
-Hero mechanics are loaded into memory on startup and updated daily. Item mechanics are loaded lazily for items present in the local player inventory. The AI context uses English mechanics data and only the final answer language is localized.
+Hero mechanics are loaded from cache or fetched on startup, and refreshed only by the admin update button. Item mechanics are loaded lazily for items present in the local player inventory and are also persisted in the cache file. The AI context uses English mechanics data and only the final answer language is localized.
+
+`data/dota_data_cache.json` holds every field listed in `CACHE_FIELDS` (heroes, items, abilities, ability_ids, patches, datafeed data, hero_mechanics, item_mechanics, hero_win_rates, hero_counters, hero_builds, updated_at) as one JSON object — a full in-memory snapshot, not an append log. It is gitignored; delete it to force a full re-fetch on the next restart.
 ```
 
 OpenDota requires a non-default `User-Agent`; the service sends `DotAIBuffBot/0.1`.
@@ -315,7 +317,7 @@ The admin bot also receives one plain-text notification when a new user register
 - admin Telegram bot;
 - FastAPI GSI endpoint on `GSI_HOST:GSI_PORT` (defaults to `127.0.0.1:8000`).
 - FastAPI Dota data endpoint on `DOTA_DATA_HOST:DOTA_DATA_PORT` (defaults to `127.0.0.1:8001`).
-- daily Dota data updater.
+- Dota data loader (`load_startup_data()`) — cache-or-fetch-once, no periodic refresh.
 
 Before local services start, `prepare_runtime()` creates SQLite tables. If `CLEAR_GSI_STATE_ON_START=1`, it deletes Redis keys matching `gsi:*`. This is a temporary development setting to avoid mixing test matches when Dota reports `match_id = 0`. Keep this at `0` on a server, otherwise every restart wipes every user's active match.
 
@@ -352,7 +354,7 @@ STRATZ_API_TOKEN=Bearer ...
 
 ## Docker
 
-`Dockerfile` builds one image that runs `run_local.py` as its entrypoint, so the containerized process is the same bot + GSI API + Dota data API + daily updater bundle as the local run.
+`Dockerfile` builds one image that runs `run_local.py` as its entrypoint, so the containerized process is the same bot + GSI API + Dota data API + Dota data loader bundle as the local run.
 
 `docker-compose.yml` runs that image as the `app` service, starts Redis as the `redis` service with its own named volume, reads `.env` through `env_file`, overrides `REDIS_URL` to `redis://redis:6379/0` for container networking, binds FastAPI to `127.0.0.1:8000` for Caddy, publishes no public FastAPI port, and bind-mounts the whole project into `/app` so `git pull` plus an app container restart updates Python code without rebuilding the image.
 
