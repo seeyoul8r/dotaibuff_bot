@@ -1,5 +1,12 @@
 # DotAIBuffBot
 
+## Getting started
+
+- Send `/start` to the bot to register.
+- The bot shows a welcome message with a short service description and opens the main menu.
+- If you send a message or press an old button before registration, the bot explains the service and asks you to use `/start`.
+- Sending `/start` again opens the main menu without registering again.
+
 ## GSI config
 
 - Send `/start` to the bot.

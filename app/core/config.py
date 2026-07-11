@@ -21,6 +21,11 @@ class RedisConfig:
 
 
 @dataclass
+class LoggingConfig:
+    log_requests: bool
+
+
+@dataclass
 class AIConfig:
     api_key: str
     model: str
@@ -56,6 +61,13 @@ def load_redis_config(path: str | None = None) -> RedisConfig:
     env = Env()
     env.read_env(path)
     return RedisConfig(redis_url=env('REDIS_URL'), clear_gsi_state_on_start=env.bool('CLEAR_GSI_STATE_ON_START'))
+
+
+def load_logging_config(path: str | None = None) -> LoggingConfig:
+    """Read request logging config from environment."""
+    env = Env()
+    env.read_env(path)
+    return LoggingConfig(log_requests=env.bool('LOG_REQUESTS'))
 
 
 def load_ai_config(path: str | None = None) -> AIConfig:

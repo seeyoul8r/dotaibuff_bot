@@ -12,6 +12,7 @@ __pycache__/
 /bybit_delistings_log.txt
 /data/dot_ai_buff_bot.db
 /data/gsi_snapshots/
+/data/ai_requests/
 /data/popular_tickers.json
 /user_log.txt
 /error_log.txt

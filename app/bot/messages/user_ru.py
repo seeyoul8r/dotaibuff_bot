@@ -1,4 +1,12 @@
 start_text = 'DotAIBuffBot запущен.'
+welcome = '''Добро пожаловать в DotAIBuffBot!
+
+Сервис получает состояние текущего матча из Dota 2 через GSI. По вашему запросу ИИ анализирует накопленные данные и присылает три рекомендации: макрогейминг, сборку и текущий приоритет по микрогеймингу.
+
+Получите и установите персональный GSI config через меню ниже, чтобы начать.'''
+unregistered = '''Чтобы использовать DotAIBuffBot, сначала зарегистрируйтесь командой /start.
+
+Сервис получает данные текущего матча через GSI и формирует рекомендации ИИ по макрогеймингу, сборке и микрогеймингу.'''
 gsi_config_caption = 'Положи файл в папку Dota 2 gamestate_integration.'
 gsi_config_info = '''GSI-конфиг связывает Dota 2 с сервисом DotAIBuffBot. Игра отправляет через него данные матча, а бот формирует рекомендации.
 
@@ -11,12 +19,7 @@ Windows:
 Linux:
 ~/.steam/steam/steamapps/common/dota 2 beta/game/dota/cfg/gamestate_integration/
 
-3. В Steam откройте свойства Dota 2 и добавьте в Launch Options:
--gamestateintegration
-
-4. Перезапустите Dota 2.
-
-DotAIBuffBot должен быть запущен на том же компьютере, что и Dota 2.'''
+3. Перезапустите Dota 2.'''
 snapshot_not_received = 'Данные текущего матча еще не получены.'
 snapshot_title = 'Текущее состояние матча'
 match_label = 'Матч'

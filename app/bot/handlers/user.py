@@ -33,8 +33,7 @@ async def keep_advice_draft(bot: Bot, chat_id: int, draft_id: int):
 @user_router.message(CommandStart())
 async def start(message: Message):
     """Answer main bot start command."""
-    raw_lang = message.from_user.language_code or 'en'
-    lang = 'ru' if raw_lang.startswith('ru') else 'en'
+    lang = await user_repository.get_user_lang(message.from_user.id)
     await user_repository.save_user(message.from_user.id, message.from_user.first_name, message.from_user.username, lang)
     # Show localized user actions for GSI config and advice preview.
     await message.answer(text=mes_user[lang].start_text, reply_markup=kb_user[lang].mainMenu)

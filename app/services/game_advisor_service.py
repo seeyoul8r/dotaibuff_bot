@@ -9,6 +9,7 @@ from app.bot.messages import mes_user
 from app.cache.redis_cache import redis_cache
 from app.core.config import AIConfig, load_ai_config
 from app.schemas.advice import GameAdvice
+from app.services.ai_request_log_service import ai_request_log_service
 from app.services.dota_data_service import dota_data_service
 
 
@@ -69,13 +70,27 @@ class GameAdvisorService:
     async def request_advice(self, user_id: int, lang: str):
         """Request structured match advice from Gemini."""
         prompt_data = await self.build_prompt(user_id, lang)
+        contents = json.dumps(prompt_data, ensure_ascii=False)
+        response_mime_type = 'application/json'
+        response_schema = GameAdvice.model_json_schema()
+        # Persist the exact request fields before sending them to Gemini.
+        await ai_request_log_service.save_request(
+            user_id=user_id,
+            match_id=prompt_data['match_state'].get('match_id'),
+            model=self.config.model,
+            contents=contents,
+            system_instruction=self.prompt,
+            response_mime_type=response_mime_type,
+            response_schema=response_schema,
+            thinking_level=self.config.thinking_level
+        )
         # Parse schema-constrained output directly without splitting free-form model text.
         response = await self.client.models.generate_content(
             model=self.config.model,
-            contents=json.dumps(prompt_data, ensure_ascii=False),
+            contents=contents,
             config=types.GenerateContentConfig(
                 system_instruction=self.prompt,
-                response_mime_type='application/json',
+                response_mime_type=response_mime_type,
                 response_schema=GameAdvice,
                 thinking_config=types.ThinkingConfig(thinking_level=self.config.thinking_level)
             )

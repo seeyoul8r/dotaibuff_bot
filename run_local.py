@@ -49,15 +49,9 @@ async def prepare_runtime():
 
 def main_process(): 
     """Start all local project services."""
-    from app.bot.bot_instances import admin_bot, admin_config
+    from app.bot.bot_instances import notify_admins
     from app.bot.main import start_admin_bot, start_bot
     from app.services.dota_data_service import dota_data_service
-
-    async def notify_admins(text: str):
-        """Send service notification to admin chats."""
-        for admin_id in admin_config.tg_bot.admin_ids:
-            # Send every update status to each configured admin chat.
-            await admin_bot.send_message(admin_id, text=text)
 
     with open('error_log.txt', 'a', encoding='utf-8') as output:
         output.write(f"Main process started in PID: {os.getpid()}\n")

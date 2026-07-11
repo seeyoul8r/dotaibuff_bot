@@ -5,18 +5,20 @@ DotAIBuffBot is a Telegram bot plus local FastAPI service for collecting Dota 2 
 ## Runtime Flow
 
 1. The user sends `/start` to the Telegram bot.
-2. The bot shows localized buttons for GSI config, AI recommendation, and language switching.
-3. `Получить GSI config` creates a personal GSI token and sends a `.cfg` file.
-4. The user puts the config into the Dota 2 `gamestate_integration` folder and restarts Dota 2.
-5. Dota 2 sends GSI snapshots to `POST /gsi`.
-6. The API reads `payload["auth"]["token"]` and links the snapshot to a Telegram `user_id`.
-7. `MatchService` coordinates snapshot processing.
-8. Raw snapshots are temporarily saved to JSONL files for development analysis.
-9. `MatchStateService` updates the normalized internal match state in Redis.
+2. `non_user_router` registers a new user, shows the localized welcome menu, and notifies every admin chat once.
+3. The bot shows localized buttons for GSI config, AI recommendation, and language switching.
+4. `Получить GSI config` creates a personal GSI token and sends a `.cfg` file.
+5. The user puts the config into the Dota 2 `gamestate_integration` folder and restarts Dota 2.
+6. Dota 2 sends GSI snapshots to `POST /gsi`.
+7. The API reads `payload["auth"]["token"]` and links the snapshot to a Telegram `user_id`.
+8. `MatchService` coordinates snapshot processing.
+9. When `LOG_REQUESTS=1`, sanitized snapshots are saved to JSONL files for development analysis.
+10. `MatchStateService` updates the normalized internal match state in Redis.
    It locks the exact 5v5 roster from minimap positions when the local hero and at least 10 hero markers are visible: local hero plus the nearest 4 heroes are allies, and the next 5 heroes are enemies.
-10. `DotaDataService` collects OpenDota and dota2.com datafeed data on startup and then once per day.
-11. The recommendation button combines normalized match state with relevant Dota mechanics context and calls Gemini.
-12. The bot sends macro gaming, build, and current micro gaming advice as three Telegram messages.
+11. `DotaDataService` collects OpenDota and dota2.com datafeed data on startup and then once per day.
+12. The recommendation button combines normalized match state with relevant Dota mechanics context and calls Gemini.
+13. When `LOG_REQUESTS=1`, the exact model request fields are written before the Gemini call.
+14. The bot sends macro gaming, build, and current micro gaming advice as three Telegram messages.
 
 ## Main Components
 
@@ -32,12 +34,16 @@ Creates a random GSI token with `secrets.token_urlsafe(32)`, stores it for the T
 
 Stores the long-lived `user_id -> gsi_token` link in SQLite.
 
+`app/bot/handlers/non_user.py`
+
+Handles only users missing from SQLite. Its `/start` handler creates the user, sends the localized welcome menu, and notifies admins. Catch-all message and callback handlers explain the service and direct unregistered users to `/start`. The router is included before `user_router`, so stale inline buttons cannot reach handlers that require a saved language.
+
 `app/services/match_service.py`
 
 Coordinates each incoming snapshot:
 
 - gets `match_id`;
-- writes raw snapshot to file;
+- writes a sanitized snapshot to file when request logging is enabled;
 - saves latest snapshot in Redis;
 - updates accumulated match state;
 - sends one match-start notification per `user_id + match_id`;
@@ -45,13 +51,23 @@ Coordinates each incoming snapshot:
 
 `app/services/gsi_snapshot_log_service.py`
 
-Temporary development logger. It appends every raw snapshot to:
+Configurable development logger. When `LOG_REQUESTS=1`, it appends every sanitized snapshot to:
 
 ```text
 data/gsi_snapshots/{session_id}_{user_id}_{match_id}.jsonl
 ```
 
-Each line is one JSON object with `saved_at`, `user_id`, `match_id`, and sanitized `payload`. Before writing to disk, `GsiSnapshotLogService` removes `previously`, `added`, and `auth` from the saved payload. Full incoming payloads are still passed to match processing before sanitizing for disk. These files are for analysis only and are ignored by Git.
+Each line is one JSON object with `saved_at`, `user_id`, `match_id`, and sanitized `payload`. Before writing to disk, `GsiSnapshotLogService` removes `previously`, `added`, and `auth` from the saved payload. Full incoming payloads are still passed to match processing before sanitizing for disk. With `LOG_REQUESTS=0`, the service creates no directory or file. These files are for analysis only and are ignored by Git.
+
+`app/services/ai_request_log_service.py`
+
+When `LOG_REQUESTS=1`, appends each Gemini request before it is sent to:
+
+```text
+data/ai_requests/{session_id}_{user_id}_{match_id}.jsonl
+```
+
+Each line contains `timestamp`, `user_id`, `match_id`, `model`, the exact serialized `contents`, `system_instruction`, response MIME/schema settings, and `thinking_level`. API keys are never included. With `LOG_REQUESTS=0`, the service creates no directory or file.
 
 `app/services/match_state_service.py`
 
@@ -104,7 +120,7 @@ The `20260710_122845` recording demonstrated this flow. Dire was confirmed as Pu
 
 `app/services/game_advisor_service.py`
 
-Builds compact AI context containing only heroes in the match, Dota 2 datafeed mechanics for those heroes, the local player inventory item mechanics, and current patch data. It calls Gemini with structured output and tracks the per-user recommendation cooldown in process memory. One async Gemini client is created when the service starts and reused for all requests.
+Builds compact AI context containing only heroes in the match, Dota 2 datafeed mechanics for those heroes, the local player inventory item mechanics, and current patch data. It serializes the model contents once, logs the request when enabled, calls Gemini with structured output, and tracks the per-user recommendation cooldown in process memory. One async Gemini client is created when the service starts and reused for all requests.
 
 `app/ai/prompts.py`
 
@@ -235,10 +251,11 @@ gsi:match_state:{user_id}:{match_id}
 }
 ```
 
-5. `GameAdvisorService.request_advice()` sends the JSON and `GAME_ADVISOR_PROMPT` to `gemini-3.5-flash` with the configured thinking level.
-6. The Google Gen AI SDK parses the JSON response directly into `GameAdvice`.
-7. The handler stops the ephemeral draft and sends the three schema fields as separate localized messages.
-8. If the Gemini request fails, the handler stops the draft and sends a localized error message.
+5. `GameAdvisorService.request_advice()` serializes the contents once and, when enabled, writes the exact request fields to `data/ai_requests`.
+6. The service sends the JSON and `GAME_ADVISOR_PROMPT` to `gemini-3.5-flash` with the configured thinking level.
+7. The Google Gen AI SDK parses the JSON response directly into `GameAdvice`.
+8. The handler stops the ephemeral draft and sends the three schema fields as separate localized messages.
+9. If the Gemini request fails, the handler stops the draft and sends a localized error message.
 
 The cooldown is configured by `AI_ADVICE_COOLDOWN` and is set before the paid API request. It is stored in `GameAdvisorService._cooldowns`, resets when the bot process restarts, and can be changed at runtime through the admin `Set advice cooldown` button.
 
@@ -273,6 +290,8 @@ The admin bot `/start` menu includes maintenance actions:
 - `Set advice cooldown`: update `AI_ADVICE_COOLDOWN` in `.env` and call `GameAdvisorService.reload_config()` so the new value applies without a container restart.
 - `Error log` / `Clean log`: read or clear `error_log.txt`.
 
+The admin bot also receives one plain-text notification when a new user registers through the main bot. Notification delivery is isolated per admin chat so one unavailable chat does not block the others.
+
 
 `run_local.py` starts:
 
@@ -294,6 +313,7 @@ ADMIN_BOT_TOKEN=...
 ADMIN_IDS=...
 REDIS_URL=redis://localhost:6379/0
 CLEAR_GSI_STATE_ON_START=1
+LOG_REQUESTS=1
 GEMINI_API_KEY=...
 GEMINI_MODEL=gemini-3.5-flash
 GEMINI_THINKING_LEVEL=low
@@ -305,9 +325,11 @@ DOTA_DATA_HOST=127.0.0.1
 DOTA_DATA_PORT=8001
 ```
 
+`LOG_REQUESTS=1` enables both sanitized GSI snapshot files and exact AI request files. Set it to `0` to disable both file writers. The value is read on process startup.
+
 `GSI_HOST`/`GSI_PORT`/`DOTA_DATA_HOST`/`DOTA_DATA_PORT` and `GSI_PUBLIC_URL` all default to the values above, so an `.env` without them keeps today's local-only behavior unchanged.
 
-`GSI_PUBLIC_URL` is written into the `.cfg` file `ClientLinkService.build_gsi_config()` generates � it is the address the Dota 2 client itself sends snapshots to, so it must be reachable from the player's machine. On a server behind Caddy this should be the public IP or domain without the internal FastAPI port, for example `http://193.42.60.48/gsi`.
+`GSI_PUBLIC_URL` is written into the `.cfg` file `ClientLinkService.build_gsi_config()` generates — it is the address the Dota 2 client itself sends snapshots to, so it must be reachable from the player's machine. On a server behind Caddy this should be the public IP or domain without the internal FastAPI port, for example `http://193.42.60.48/gsi`.
 
 ## Docker
 
@@ -386,7 +408,7 @@ OpenDota provides patch metadata through `constants/patch`, but not full patch n
 - Per-match Redis cleanup is not implemented yet.
 - AI recommendations require a valid `GEMINI_API_KEY` and current accumulated match state.
 - The recommendation cooldown is local to one bot process and is not shared through Redis.
-- Raw snapshot logging is temporary and should become optional debug behavior later.
+- Request log files are development artifacts and can grow until they are removed manually.
 
 ## Next Architecture Step
 

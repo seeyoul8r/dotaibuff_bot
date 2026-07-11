@@ -6,7 +6,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import BotCommand
 
 from app.bot.bot_instances import admin_bot, bot
-from app.bot.handlers import admin_router, user_router
+from app.bot.handlers import admin_router, non_user_router, user_router
 from app.models.database import db
 
 
@@ -16,6 +16,8 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 async def start_bot():
     """Start main Telegram bot polling."""
     dp = Dispatcher(storage=MemoryStorage())
+    # Handle registration and all unregistered updates before regular user actions.
+    dp.include_router(non_user_router)
     dp.include_router(user_router)
     main_menu_commands = [
         BotCommand(command='/start',
