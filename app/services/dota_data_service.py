@@ -273,7 +273,11 @@ class DotaDataService:
         hero_id_to_name = {hero['definition']['id']: gsi_name for gsi_name, hero in self.heroes.items()}
         item_id_to_name = {item['id']: item_key for item_key, item in self.items.items()}
         # ability_ids (not self.abilities) is the OpenDota resource that carries numeric ability ids.
-        ability_id_to_name = {int(ability_id): name for ability_id, name in self.ability_ids.items()}
+        # Some keys are comma-separated groups of ids that share one ability name (e.g. "3060,1617").
+        ability_id_to_name = {}
+        for ability_id_key, name in self.ability_ids.items():
+            for ability_id in ability_id_key.split(','):
+                ability_id_to_name[int(ability_id)] = name
 
         hero_win_rates = {}
         hero_counters = {}
