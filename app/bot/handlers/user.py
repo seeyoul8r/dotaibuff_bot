@@ -115,22 +115,16 @@ async def send_ai_advice(callback: CallbackQuery):
         return
 
     advice_time = mes_user[lang].advice_actual_at(match_state.get('clock_time'))
-    # Repeat match time in each advice section because Telegram messages can be read separately.
+    # Send one persistent result message so Telegram keeps the whole answer visible after the draft.
     await callback.message.answer(
-        text=f'{advice_time}\n\n{mes_user[lang].macro_advice_title}\n\n{advice.macro_gaming}',
-        parse_mode=None
-    )
-    await callback.message.answer(
-        text=f'{advice_time}\n\n{mes_user[lang].build_advice_title}\n\n{advice.build}',
-        parse_mode=None
-    )
-    await callback.message.answer(
-        text=f'{advice_time}\n\n{mes_user[lang].micro_advice_title}\n\n{advice.micro_gaming}',
-        parse_mode=None
-    )
-    # Show when the next paid request is available and keep the same cooldown-protected callback.
-    await callback.message.answer(
-        text=mes_user[lang].next_advice_available(int(game_advisor_service.config.advice_cooldown)),
+        text=(
+            f'{advice_time}\n\n'
+            f'{mes_user[lang].macro_advice_title}\n\n{advice.macro_gaming}\n\n'
+            f'{mes_user[lang].build_advice_title}\n\n{advice.build}\n\n'
+            f'{mes_user[lang].micro_advice_title}\n\n{advice.micro_gaming}\n\n'
+            f'{mes_user[lang].next_advice_available(int(game_advisor_service.config.advice_cooldown))}'
+        ),
+        parse_mode=None,
         reply_markup=kb_user[lang].afterAdviceMenu
     )
 
