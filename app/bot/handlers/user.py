@@ -10,6 +10,7 @@ from app.bot.messages import mes_user
 from app.cache.redis_cache import redis_cache
 from app.repositories.user_repository import user_repository
 from app.services.client_link_service import client_link_service
+from app.services.dota_data_service import dota_data_service
 from app.services.game_advisor_service import game_advisor_service
 
 
@@ -139,6 +140,7 @@ def format_enemy_map_info(match_state: dict, lang: str):
         return ''
 
     current_game_time = match_state.get('clock_time')
+    dota_data = dota_data_service.get_data()
     lines = []
     for hero_name, hero_state in match_state[opponent_team_name]['heroes'].items():
         last_seen_game_time = hero_state.get('last_seen_game_time')
@@ -151,7 +153,8 @@ def format_enemy_map_info(match_state: dict, lang: str):
         if seen_seconds_ago is None and not hero_state.get('visible', False):
             continue
         seen_time = mes_user[lang].enemy_seen_time(hero_state.get('visible', False), seen_seconds_ago)
-        lines.append(f'{hero_name} | {hero_state.get("last_seen_location", "unknown")} | {seen_time}')
+        hero_title = dota_data['heroes'][hero_name]['definition']['localized_name']
+        lines.append(f'{hero_title} | {hero_state.get("last_seen_location", "unknown")} | {seen_time}')
 
     if not lines:
         return ''
