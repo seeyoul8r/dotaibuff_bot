@@ -3,14 +3,21 @@ import time
 
 from google import genai
 from google.genai import types
+from pydantic import BaseModel
 
 from app.ai.prompts import GAME_ADVISOR_PROMPT
 from app.bot.messages import mes_user
 from app.cache.redis_cache import redis_cache
 from app.core.config import AIConfig, load_ai_config
-from app.schemas.advice import GameAdvice
 from app.services.ai_request_log_service import ai_request_log_service
 from app.services.dota_data_service import dota_data_service
+
+
+class GameAdvice(BaseModel):
+    """Structured Dota game advice."""
+    macro_gaming: str
+    build: str
+    micro_gaming: str
 
 
 class GameAdvisorService:

@@ -7,7 +7,93 @@ from app.cache.redis_cache import redis_cache
 logger = logging.getLogger(__name__)
 
 
+class HeroTeamDetector:
+    def apply_roster_lock(self, match_state: dict, minimap_heroes: list, now: str):
+        """Lock exact teams from draft heroes and live allied markers."""
+        player_team_name = match_state['player'].get('team_name')
+        local_hero_name = match_state['hero'].get('name')
+        if player_team_name not in ('radiant', 'dire') or local_hero_name is None:
+            return
+
+        # Accumulate draft heroes because later live snapshots can stop sending plain circles.
+        for hero_name in self.get_plaincircle_heroes(minimap_heroes):
+            self.apply_hero(match_state, hero_name, None, 'minimap_plaincircle', now)
+
+        draft_heroes = set(match_state['unknown_heroes'])
+        live_allied_heroes = self.get_live_allied_heroes(minimap_heroes)
+        if local_hero_name not in live_allied_heroes:
+            return
+        if len(draft_heroes) != 10 or len(live_allied_heroes) != 5:
+            return
+
+        enemy_heroes = draft_heroes - live_allied_heroes
+        if len(enemy_heroes) != 5:
+            return
+
+        opponent_team_name = 'dire' if player_team_name == 'radiant' else 'radiant'
+        match_state['radiant']['heroes'] = {}
+        match_state['dire']['heroes'] = {}
+        match_state['unknown_heroes'] = {}
+        for hero_name in live_allied_heroes:
+            self.apply_hero(match_state, hero_name, player_team_name, 'locked_minimap', now)
+        for hero_name in enemy_heroes:
+            self.apply_hero(match_state, hero_name, opponent_team_name, 'locked_minimap', now)
+        # Stop accepting minimap roster updates after exact 5v5 teams are known.
+        match_state['roster_locked'] = True
+        match_state['enemy_detection_ready'] = True
+
+    def get_plaincircle_heroes(self, minimap_heroes: list):
+        """Return unique hero names from plain minimap circles."""
+        return {
+            minimap_hero['hero_name']
+            for minimap_hero in minimap_heroes
+            if minimap_hero['image'] == 'minimap_plaincircle'
+        }
+
+    def get_live_allied_heroes(self, minimap_heroes: list):
+        """Return unique allied hero names from live minimap markers."""
+        return {
+            minimap_hero['hero_name']
+            for minimap_hero in minimap_heroes
+            if minimap_hero['image'] in ('minimap_herocircle', 'minimap_herocircle_self', 'minimap_heroinvis')
+        }
+
+    def apply_hero(self, match_state: dict, hero_name: str, team_name: str | None, source: str, now: str):
+        """Apply hero to accumulated match state."""
+        team_key = team_name if team_name in ('radiant', 'dire') else 'unknown_heroes'
+        previous_hero_state = self.pop_hero(match_state, hero_name)
+        heroes = match_state[team_key]['heroes'] if team_key in ('radiant', 'dire') else match_state[team_key]
+        hero_state = previous_hero_state or {
+            'team': team_name,
+            'sources': [],
+            'first_seen_at': now,
+            'last_seen_at': now
+        }
+        if source not in hero_state['sources']:
+            # Track every source that confirmed this hero.
+            hero_state['sources'].append(source)
+        hero_state['team'] = team_name
+        hero_state['last_seen_at'] = now
+        heroes[hero_name] = hero_state
+        return hero_state
+
+    def pop_hero(self, match_state: dict, hero_name: str):
+        """Remove hero from current match state buckets."""
+        # Keep one current team bucket per hero when later snapshots update team data.
+        hero_state = match_state['radiant']['heroes'].pop(hero_name, None)
+        if hero_state is not None:
+            return hero_state
+        hero_state = match_state['dire']['heroes'].pop(hero_name, None)
+        if hero_state is not None:
+            return hero_state
+        return match_state['unknown_heroes'].pop(hero_name, None)
+
+
 class MatchStateService:
+    def __init__(self):
+        """Store hero team detector."""
+        self.hero_team_detector = HeroTeamDetector()
+
     async def update_match_state(self, user_id: int, match_id: int, payload: dict):
         """Update accumulated match state from GSI snapshot."""
         match_state = await self.get_match_state(user_id, match_id)
@@ -50,7 +136,7 @@ class MatchStateService:
         player_team_name = match_state['player'].get('team_name')
         minimap_heroes = self.extract_minimap_heroes(payload, player_team_name)
         if not match_state.get('roster_locked'):
-            self.lock_roster_from_minimap(match_state, minimap_heroes, now)
+            self.hero_team_detector.apply_roster_lock(match_state, minimap_heroes, now)
         if match_state.get('roster_locked'):
             await redis_cache.set_match_state(user_id, match_id, match_state)
             logger.info(
@@ -60,7 +146,7 @@ class MatchStateService:
                 f'unknown={len(match_state["unknown_heroes"])}'
             )
             return
-        # Apply reliable allied and visible-enemy markers before resolving plain circles.
+        # Apply reliable allied and visible-enemy markers while waiting for exact roster lock.
         for minimap_hero in minimap_heroes:
             if minimap_hero['image'] == 'minimap_plaincircle':
                 continue
@@ -74,29 +160,6 @@ class MatchStateService:
             # Keep the last reliable visible position for map-aware advice.
             hero_state['last_seen_position'] = minimap_hero['position']
             hero_state['last_seen_image'] = minimap_hero['image']
-
-        if player_team_name in ('radiant', 'dire'):
-            local_heroes = match_state[player_team_name]['heroes']
-            plaincircle_heroes = {
-                minimap_hero['hero_name']
-                for minimap_hero in minimap_heroes
-                if minimap_hero['image'] == 'minimap_plaincircle'
-                and minimap_hero['hero_name'] not in local_heroes
-            }
-            if match_state['enemy_detection_ready']:
-                opponent_team_name = 'dire' if player_team_name == 'radiant' else 'radiant'
-                # Infer enemy roster only after the allied lineup baseline was confirmed.
-                for hero_name in plaincircle_heroes:
-                    self.apply_hero(
-                        match_state,
-                        hero_name,
-                        opponent_team_name,
-                        'minimap_plaincircle_inferred',
-                        now
-                    )
-            elif len(local_heroes) == 5 and not plaincircle_heroes:
-                # A clean five-allies snapshot separates live markers from stale draft markers.
-                match_state['enemy_detection_ready'] = True
 
         await redis_cache.set_match_state(user_id, match_id, match_state)
         logger.info(
@@ -176,87 +239,13 @@ class MatchStateService:
             })
         return heroes
 
-    def lock_roster_from_minimap(self, match_state: dict, minimap_heroes: list, now: str):
-        """Lock exact 5v5 roster from minimap hero positions."""
-        player_team_name = match_state['player'].get('team_name')
-        local_hero_name = match_state['hero'].get('name')
-        if player_team_name not in ('radiant', 'dire') or local_hero_name is None:
-            return
-
-        hero_positions = {}
-        for minimap_hero in minimap_heroes:
-            position = minimap_hero['position']
-            if position['xpos'] is None or position['ypos'] is None:
-                continue
-            # Keep one position per visible hero in the current snapshot.
-            hero_positions[minimap_hero['hero_name']] = {
-                'xpos': float(position['xpos']),
-                'ypos': float(position['ypos'])
-            }
-
-        if local_hero_name not in hero_positions or len(hero_positions) < 10:
-            return
-
-        local_position = hero_positions[local_hero_name]
-        other_heroes = [
-            (hero_name, self.get_position_distance(local_position, position))
-            for hero_name, position in hero_positions.items()
-            if hero_name != local_hero_name
-        ]
-        other_heroes.sort(key=lambda item: item[1])
-        allied_heroes = {local_hero_name} | {hero_name for hero_name, _ in other_heroes[:4]}
-        enemy_heroes = {hero_name for hero_name, _ in other_heroes[4:9]}
-        if len(allied_heroes) != 5 or len(enemy_heroes) != 5:
-            return
-
-        opponent_team_name = 'dire' if player_team_name == 'radiant' else 'radiant'
-        match_state['radiant']['heroes'] = {}
-        match_state['dire']['heroes'] = {}
-        match_state['unknown_heroes'] = {}
-        for hero_name in allied_heroes:
-            self.apply_hero(match_state, hero_name, player_team_name, 'locked_minimap', now)
-        for hero_name in enemy_heroes:
-            self.apply_hero(match_state, hero_name, opponent_team_name, 'locked_minimap', now)
-        # Stop accepting extra stale minimap hero markers after exact 5v5 roster is known.
-        match_state['roster_locked'] = True
-        match_state['enemy_detection_ready'] = True
-
-    def get_position_distance(self, first_position: dict, second_position: dict):
-        """Return squared distance between two minimap positions."""
-        return (
-            (first_position['xpos'] - second_position['xpos']) ** 2
-            + (first_position['ypos'] - second_position['ypos']) ** 2
-        )
-
     def apply_hero(self, match_state: dict, hero_name: str, team_name: str | None, source: str, now: str):
         """Apply hero to accumulated match state."""
-        team_key = team_name if team_name in ('radiant', 'dire') else 'unknown_heroes'
-        previous_hero_state = self.pop_hero(match_state, hero_name)
-        heroes = match_state[team_key]['heroes'] if team_key in ('radiant', 'dire') else match_state[team_key]
-        hero_state = previous_hero_state or {
-            'team': team_name,
-            'sources': [],
-            'first_seen_at': now,
-            'last_seen_at': now
-        }
-        if source not in hero_state['sources']:
-            # Track every source that confirmed this hero.
-            hero_state['sources'].append(source)
-        hero_state['team'] = team_name
-        hero_state['last_seen_at'] = now
-        heroes[hero_name] = hero_state
-        return hero_state
+        return self.hero_team_detector.apply_hero(match_state, hero_name, team_name, source, now)
 
     def pop_hero(self, match_state: dict, hero_name: str):
         """Remove hero from current match state buckets."""
-        # Keep one current team bucket per hero when later snapshots update team data.
-        hero_state = match_state['radiant']['heroes'].pop(hero_name, None)
-        if hero_state is not None:
-            return hero_state
-        hero_state = match_state['dire']['heroes'].pop(hero_name, None)
-        if hero_state is not None:
-            return hero_state
-        return match_state['unknown_heroes'].pop(hero_name, None)
+        return self.hero_team_detector.pop_hero(match_state, hero_name)
 
     def get_team_name(self, team_id: int | None):
         """Return team name by GSI team id."""

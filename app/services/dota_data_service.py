@@ -119,24 +119,32 @@ class DotaDataService:
         DOTA_DATA_CACHE_PATH.write_text(json.dumps(cache_data, ensure_ascii=False), encoding='utf-8')
 
     async def update_data(self):
-        """Update all collected Dota data."""
+        """Update external Dota data cache. See docs/README.md for cache field meanings."""
         started_at = time.monotonic()
         await self.notify_admins('Dota data update started.')
         try:
             logger.info('Dota data update started.')
+            # OpenDota /heroStats returns hero stat rows, e.g. {"id": 1, "name": "npc_dota_hero_antimage"}.
             hero_stats = await self.fetch_opendota_json('/heroStats')
+            # OpenDota /constants/heroes returns hero definitions, e.g. {"1": {"id": 1, "localized_name": "Anti-Mage"}}.
             heroes = await self.fetch_opendota_json('/constants/heroes')
+            # OpenDota /constants/items returns item definitions, e.g. {"blink": {"id": 1, "dname": "Blink Dagger"}}.
             items = await self.fetch_opendota_json('/constants/items')
+            # OpenDota /constants/abilities returns ability definitions, e.g. {"antimage_mana_break": {"dname": "Mana Break"}}.
             abilities = await self.fetch_opendota_json('/constants/abilities')
             # /constants/abilities has no numeric id; ability_ids is the id->name lookup STRATZ ids need.
+            # OpenDota /constants/ability_ids returns ability id lookup, e.g. {"5003": "antimage_mana_break"}.
             ability_ids = await self.fetch_opendota_json('/constants/ability_ids')
+            # OpenDota /constants/patch returns patch metadata, e.g. {"name": "7.39", "date": 174...}.
             patches = await self.fetch_opendota_json('/constants/patch')
             logger.info(
                 f'OpenDota data loaded: heroes={len(heroes)}, items={len(items)}, '
                 f'abilities={len(abilities)}, ability_ids={len(ability_ids)}, '
                 f'patch={patches[-1]["name"] if patches else None}'
             )
+            # Dota 2 datafeed /herolist returns official hero rows, e.g. {"id": 1, "name": "npc_dota_hero_antimage"}.
             datafeed_heroes = await self.fetch_dota2_datafeed_json('/herolist')
+            # Dota 2 datafeed /itemlist returns official item rows, e.g. {"id": 1, "name": "item_blink"}.
             datafeed_items = await self.fetch_dota2_datafeed_json('/itemlist')
             logger.info(
                 f'Dota 2 datafeed lists loaded: '
@@ -167,8 +175,10 @@ class DotaDataService:
                 item['name']: item
                 for item in datafeed_items['result']['data']['itemabilities']
             }
+            # Dota 2 datafeed detail requests return hero mechanics, e.g. abilities, talents, facets, innate data.
             self.hero_mechanics = await self.fetch_all_hero_mechanics()
             self.item_mechanics = {}
+            # STRATZ GraphQL returns hero win rates, counters, and builds, e.g. matchup and item purchase rows.
             self.hero_win_rates, self.hero_counters, self.hero_builds = await self.fetch_all_stratz_data()
             self.updated_at = datetime.now(UTC).isoformat()
             self.is_ready = True

@@ -104,31 +104,27 @@ Current hero sources:
 - local player hero from `hero.name` and `player.team_name`;
 - allied heroes from `minimap_herocircle`, `minimap_herocircle_self`, and `minimap_heroinvis`;
 - enemy heroes from `minimap_enemyicon`;
-- inferred enemy roster from `minimap_plaincircle` after the allied lineup baseline is confirmed;
+- draft hero pool from unique `minimap_plaincircle` names before the roster is locked;
 - the last reliable visible position is stored for each minimap hero.
 
-`minimap_plaincircle.team` is not reliable. In the recorded match where the local player was Dire, early draft markers assigned all heroes to team `2`, while later enemy markers used both teams `2` and `4`. Team assignment therefore follows this sequence:
+`minimap_plaincircle.team` and draft-layout coordinates are not reliable. Team assignment therefore follows this sequence:
 
 1. `player.team_name` defines the local and opposing teams.
-2. The local hero and reliable allied minimap circles build the local roster.
-3. Early `minimap_plaincircle` markers are ignored while fewer than five allies are known.
-4. After five allies are known, a snapshot with no non-allied plain circles sets `enemy_detection_ready = true`. This clean snapshot separates stale draft/showcase markers from the live pre-game markers.
-5. New plain-circle heroes not present in the allied roster are assigned to the opposing team with source `minimap_plaincircle_inferred`.
-6. Inferred plain-circle coordinates are not stored as last-seen positions. A later `minimap_enemyicon` confirms the enemy and supplies a reliable visible position.
+2. `HeroTeamDetector` accumulates unique `minimap_plaincircle` hero names into `unknown_heroes` as the draft pool.
+3. Live allied markers from `minimap_herocircle`, `minimap_herocircle_self`, and `minimap_heroinvis` build the local team candidate.
+4. The roster is locked only when the draft pool has exactly 10 unique heroes, the live allied candidate has exactly 5 unique heroes, and the local hero is one of those 5.
+5. The 5 live allied heroes are assigned to the local player's team, and the remaining 5 draft heroes are assigned to the opposing team.
+6. After `roster_locked = true`, minimap hero roster detection stops changing team membership.
 
-The `20260710_122845` recording demonstrated this flow. Dire was confirmed as Pudge, Crystal Maiden, Drow Ranger, Skeleton King, and Viper. After the clean allied baseline, Axe, Nyx Assassin, Venomancer, Oracle, and Bristleback appeared and were inferred as Radiant.
+The `8892275624` recording demonstrated this flow for two users on Radiant. Sven and Night Stalker both locked the same allied roster: Sven, Night Stalker, Disruptor, Grimstroke, and Medusa. Bloodseeker, Nyx Assassin, Oracle, Sniper, and Spectre were assigned to Dire.
 
 `app/services/game_advisor_service.py`
 
-Builds compact AI context containing only heroes in the match, Dota 2 datafeed mechanics for those heroes, the local player inventory item mechanics, and current patch data. It serializes the model contents once, logs the request when enabled, calls Gemini with structured output, and tracks the per-user recommendation cooldown in process memory. One async Gemini client is created when the service starts and reused for all requests.
+Builds compact AI context containing only heroes in the match, Dota 2 datafeed mechanics for those heroes, the local player inventory item mechanics, and current patch data. It defines the structured `GameAdvice` response model with `macro_gaming`, `build`, and `micro_gaming` fields, serializes the model contents once, logs the request when enabled, calls Gemini with structured output, and tracks the per-user recommendation cooldown in process memory. One async Gemini client is created when the service starts and reused for all requests.
 
 `app/ai/prompts.py`
 
 Stores `GAME_ADVISOR_PROMPT`. The prompt requires advice based only on supplied data and requests the answer in the user's selected language.
-
-`app/schemas/advice.py`
-
-Defines the structured `GameAdvice` response with `macro_gaming`, `build`, and `micro_gaming` fields.
 
 `app/services/dota_data_service.py`
 
@@ -171,6 +167,25 @@ Dota 2 datafeed endpoints used for current mechanics:
 Hero mechanics are loaded from cache or fetched on startup, and refreshed only by the admin update button. Item mechanics are loaded lazily for items present in the local player inventory and are also persisted in the cache file. The AI context uses English mechanics data and only the final answer language is localized.
 
 `data/dota_data_cache.json` holds every field listed in `CACHE_FIELDS` (heroes, items, abilities, ability_ids, patches, datafeed data, hero_mechanics, item_mechanics, hero_win_rates, hero_counters, hero_builds, updated_at) as one JSON object — a full in-memory snapshot, not an append log. It is gitignored; delete it to force a full re-fetch on the next restart.
+`data/dota_data_cache.json` field meanings:
+
+- `hero_stats`: OpenDota `/heroStats` rows indexed by GSI hero name, for example `npc_dota_hero_antimage -> {"id": 1, "name": "npc_dota_hero_antimage"}`.
+- `heroes`: OpenDota `/constants/heroes` definitions combined with `hero_stats`, for example `{"definition": {"localized_name": "Anti-Mage"}, "stats": {"primary_attr": "agi"}}`.
+- `items`: OpenDota `/constants/items` item definitions, for example `blink -> {"id": 1, "dname": "Blink Dagger"}`.
+- `abilities`: OpenDota `/constants/abilities` ability definitions, for example `antimage_mana_break -> {"dname": "Mana Break"}`.
+- `ability_ids`: OpenDota `/constants/ability_ids` numeric ability id lookup used for STRATZ rows, for example `"5003" -> "antimage_mana_break"`.
+- `patches`: OpenDota `/constants/patch` patch metadata list, for example `{"name": "7.39", "date": 174...}`.
+- `latest_patch`: the last entry from `patches`, used as the current known patch metadata.
+- `patch_notes`: reserved patch notes map; currently saved as an empty object.
+- `datafeed_heroes`: dota2.com `/datafeed/herolist` hero rows indexed by hero name, for example `npc_dota_hero_antimage -> {"id": 1, "name": "npc_dota_hero_antimage"}`.
+- `datafeed_items`: dota2.com `/datafeed/itemlist` item rows indexed by item name, for example `item_blink -> {"id": 1, "name": "item_blink"}`.
+- `hero_mechanics`: dota2.com `/datafeed/herodata` hero detail data, including abilities, talents, facets, and innate data.
+- `item_mechanics`: dota2.com `/datafeed/itemdata` item detail data; `update_data()` resets it to `{}` and item details are loaded lazily for local inventory items.
+- `hero_win_rates`: STRATZ GraphQL hero win/match counts for the latest returned game version.
+- `hero_counters`: STRATZ GraphQL hero-vs-hero matchup data, keyed by local hero name and enemy hero name.
+- `hero_builds`: STRATZ GraphQL starting items, core items, ability order, and talents, normalized to one representative row per item/ability.
+- `updated_at`: UTC ISO timestamp of the last successful cache update.
+
 OpenDota requires a non-default `User-Agent`; the service sends `DotAIBuffBot/0.1`.
 
 Runtime storage is indexed by GSI names:
