@@ -66,7 +66,7 @@ class GameAdvisorService:
                 if hero_name in dota_data['hero_mechanics']
             },
             'local_items': {
-                item_name: item_mechanics[item_name]
+                item_name: self.compact_ability_or_item(item_mechanics[item_name])
                 for item_name in item_names
                 if item_name in item_mechanics
             },
