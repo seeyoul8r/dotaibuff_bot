@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+from concurrent.futures import ProcessPoolExecutor
 
 import uvicorn
 
@@ -67,4 +68,5 @@ def main_process():
 
 
 if __name__ == '__main__':
-    main_process()
+    with ProcessPoolExecutor(max_workers=1) as executor:
+        executor.submit(main_process)
