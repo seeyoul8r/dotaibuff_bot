@@ -2,6 +2,7 @@ import logging
 from datetime import UTC, datetime
 
 from app.cache.redis_cache import redis_cache
+from app.schemas.match_state import MatchHeroState
 
 
 logger = logging.getLogger(__name__)
@@ -65,12 +66,11 @@ class HeroTeamDetector:
         team_key = team_name if team_name in ('radiant', 'dire') else 'unknown_heroes'
         previous_hero_state = self.pop_hero(match_state, hero_name)
         heroes = match_state[team_key]['heroes'] if team_key in ('radiant', 'dire') else match_state[team_key]
-        hero_state = previous_hero_state or {
-            'team': team_name,
-            'sources': [],
-            'first_seen_at': now,
-            'last_seen_at': now
-        }
+        hero_state = previous_hero_state or MatchHeroState(
+            team=team_name,
+            first_seen_at=now,
+            last_seen_at=now
+        ).to_dict()
         if source not in hero_state['sources']:
             # Track every source that confirmed this hero.
             hero_state['sources'].append(source)
@@ -266,6 +266,7 @@ class MatchStateService:
             if hero_state is None:
                 continue
             # Store only locked enemy roster positions to avoid stale or unrelated minimap markers.
+            hero_state['was_visible'] = True
             hero_state['visible'] = True
             hero_state['last_seen_at'] = now
             hero_state['last_seen_game_time'] = match_state.get('clock_time')

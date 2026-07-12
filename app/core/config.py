@@ -1,50 +1,6 @@
-from dataclasses import dataclass
-
 from environs import Env
 
-
-@dataclass
-class TgBot:
-    token: str
-    admin_ids: list[int]
-
-
-@dataclass
-class Config:
-    tg_bot: TgBot
-
-
-@dataclass
-class RedisConfig:
-    redis_url: str
-    clear_gsi_state_on_start: bool
-
-
-@dataclass
-class LoggingConfig:
-    log_requests: bool
-
-
-@dataclass
-class AIConfig:
-    api_key: str
-    model: str
-    thinking_level: str
-    advice_cooldown: int
-
-
-@dataclass
-class ServerConfig:
-    gsi_host: str
-    gsi_port: int
-    gsi_public_url: str
-    dota_data_host: str
-    dota_data_port: int
-
-
-@dataclass
-class StratzConfig:
-    api_token: str
+from app.schemas.config import AIConfig, Config, LoggingConfig, RedisConfig, ServerConfig, StratzConfig, TgBot
 
 
 def load_config(path: str | None = None) -> Config:

@@ -1,12 +1,12 @@
 start_text = 'DotAIBuffBot запущен.'
 welcome = '''Добро пожаловать в DotAIBuffBot!
 
-Сервис получает состояние текущего матча из Dota 2 через GSI. По вашему запросу ИИ анализирует накопленные данные и присылает три рекомендации: макрогейминг, сборку и текущий приоритет по микрогеймингу.
+Сервис получает состояние текущего матча из Dota 2 через GSI. По вашему запросу ИИ анализирует накопленные данные и присылает информацию о врагах на карте и три рекомендации: макрогейминг, сборку и текущий приоритет по микрогеймингу.
 
 Получите и установите персональный GSI config через меню ниже, чтобы начать.'''
 unregistered = '''Чтобы использовать DotAIBuffBot, сначала зарегистрируйтесь командой /start.
 
-Сервис получает данные текущего матча через GSI и формирует рекомендации ИИ по макрогеймингу, сборке и микрогеймингу.'''
+Сервис получает данные текущего матча через GSI и формирует информацию о врагах на карте и рекомендации ИИ по макрогеймингу, сборке и микрогеймингу.'''
 gsi_config_caption = 'Положи файл в папку Dota 2 gamestate_integration.'
 gsi_config_info = '''GSI-конфиг связывает Dota 2 с сервисом DotAIBuffBot. Игра отправляет через него данные матча, а бот формирует рекомендации.
 
@@ -40,6 +40,8 @@ items_label = 'Предметы'
 radiant_label = 'Radiant'
 dire_label = 'Dire'
 language_changed = 'Язык изменен.'
+enemy_map_info_title = 'Враги на карте'
+enemy_map_info_header = 'Герой | Где видели | Когда'
 macro_advice_title = 'Макрогейминг'
 build_advice_title = 'Сборка'
 micro_advice_title = 'Микрогейминг: приоритет сейчас'
@@ -72,6 +74,13 @@ def next_advice_available(cooldown_period: int):
         f'\u0441\u043b\u0435\u0434\u0443\u044e\u0449\u0438\u0439 \u0437\u0430\u043f\u0440\u043e\u0441 '
         f'\u0447\u0435\u0440\u0435\u0437 {cooldown_period} \u0441\u0435\u043a.'
     )
+
+
+def enemy_seen_time(visible: bool, seen_seconds_ago: int | None):
+    """Return enemy last seen time text."""
+    if visible:
+        return 'сейчас'
+    return f'{seen_seconds_ago} сек назад'
 
 
 def match_started(match_id: int):

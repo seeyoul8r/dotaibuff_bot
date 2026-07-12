@@ -1,12 +1,12 @@
 start_text = 'DotAIBuffBot started.'
 welcome = '''Welcome to DotAIBuffBot!
 
-The service receives the current Dota 2 match state through GSI. On request, AI analyzes the accumulated data and sends three recommendations: macro gaming, a build, and the current micro gaming priority.
+The service receives the current Dota 2 match state through GSI. On request, AI analyzes the accumulated data and sends enemy map info plus three recommendations: macro gaming, a build, and the current micro gaming priority.
 
 Get and install your personal GSI config from the menu below to begin.'''
 unregistered = '''To use DotAIBuffBot, register first with the /start command.
 
-The service receives current match data through GSI and provides AI recommendations for macro gaming, builds, and micro gaming.'''
+The service receives current match data through GSI and provides enemy map info plus AI recommendations for macro gaming, builds, and micro gaming.'''
 gsi_config_caption = 'Put the file into the Dota 2 gamestate_integration folder.'
 gsi_config_info = '''A GSI config connects Dota 2 to the local DotAIBuffBot service. The game sends match data through it, and the bot prepares recommendations.
 
@@ -40,6 +40,8 @@ items_label = 'Items'
 radiant_label = 'Radiant'
 dire_label = 'Dire'
 language_changed = 'Language changed.'
+enemy_map_info_title = 'Enemy map info'
+enemy_map_info_header = 'Hero | Last seen | Time'
 macro_advice_title = 'Macro gaming'
 build_advice_title = 'Build'
 micro_advice_title = 'Micro gaming: current priority'
@@ -68,6 +70,13 @@ def advice_on_cooldown(remaining_time: int):
 def next_advice_available(cooldown_period: int):
     """Return next advice availability message."""
     return f'You can make the next request in {cooldown_period} sec.'
+
+
+def enemy_seen_time(visible: bool, seen_seconds_ago: int | None):
+    """Return enemy last seen time text."""
+    if visible:
+        return 'now'
+    return f'{seen_seconds_ago} sec ago'
 
 
 def match_started(match_id: int):

@@ -31,7 +31,7 @@
 - The bot combines accumulated match state with current OpenDota data and requests advice from AI.
 - After the full enemy roster is known, the recommendation uses where and when enemies were last seen on the minimap.
 - Telegram shows a temporary animated Thinking status while AI prepares the response.
-- The response arrives as one message with three sections: macro gaming, build, and the current micro gaming priority. It shows the match time it is based on.
+- The response arrives as one message with an `Enemy map info` block first, followed by macro gaming, build, and the current micro gaming priority. It shows the match time it is based on.
 - At the end of the response, the bot shows when the next request is available and adds a `New request` button.
 - If AI does not respond, the bot reports the error.
 - Each user can request advice no more than once every 3 minutes.

@@ -18,7 +18,7 @@ DotAIBuffBot is a Telegram bot plus local FastAPI service for collecting Dota 2 
 11. `DotaDataService` loads OpenDota, dota2.com datafeed, and STRATZ data from the local cache file on startup, or fetches it once if no cache exists yet.
 12. The recommendation button combines normalized match state with relevant Dota mechanics context and calls Gemini.
 13. When `LOG_REQUESTS=1`, the exact model request fields are written to SQLite before the Gemini call and updated with the response or error after the call.
-14. The bot sends macro gaming, build, and current micro gaming advice as three Telegram messages.
+14. The bot sends one advice message with enemy map info first, then macro gaming, build, and current micro gaming advice.
 
 ## Main Components
 
@@ -114,6 +114,7 @@ Enemy position fields stored inside each locked enemy hero state:
 
 ```json
 {
+  "was_visible": true,
   "visible": true,
   "last_seen_position": {"xpos": 0.71, "ypos": 0.34},
   "last_seen_location": "bot lane",
@@ -130,7 +131,19 @@ The `8893000272` recording showed why the draft pool is stored only from exact 1
 
 `app/services/game_advisor_service.py`
 
-Builds compact AI context containing only heroes in the match, Dota 2 datafeed mechanics for those heroes, the local player inventory item mechanics, and current patch data. It defines the structured `GameAdvice` response model with `macro_gaming`, `build`, and `micro_gaming` fields, serializes the model contents once, logs the request when enabled, calls Gemini with structured output, and tracks the per-user recommendation cooldown in process memory. One async Gemini client is created when the service starts and reused for all requests.
+Builds compact AI context containing only heroes in the match, Dota 2 datafeed mechanics for those heroes, the local player inventory item mechanics, and current patch data. It uses the structured `GameAdvice` response model with `macro_gaming`, `build`, and `micro_gaming` fields, serializes the model contents once, logs the request when enabled, calls Gemini with structured output, and tracks the per-user recommendation cooldown in process memory. One async Gemini client is created when the service starts and reused for all requests.
+
+`app/schemas/ai.py`
+
+Stores AI response schemas such as `GameAdvice`.
+
+`app/schemas/config.py`
+
+Stores environment config dataclasses. `app/core/config.py` only reads environment values and returns these schema objects.
+
+`app/schemas/match_state.py`
+
+Stores accumulated match state schemas such as `MatchHeroState`. `MatchHeroState` is converted to a dict before Redis storage.
 
 `app/ai/prompts.py`
 
@@ -307,7 +320,7 @@ Raw OpenDota hero definitions are not sent to AI. Hero identity comes from `matc
 5. `GameAdvisorService.request_advice()` serializes the contents once and, when enabled, writes the exact request fields to the `ai_requests` SQLite table.
 6. The service sends the JSON and `GAME_ADVISOR_PROMPT` to `gemini-3.5-flash` with the configured thinking level.
 7. The Google Gen AI SDK parses the JSON response directly into `GameAdvice`.
-8. The handler stops the ephemeral draft and sends one localized message containing the three schema fields.
+8. The handler stops the ephemeral draft, formats enemy map info from `match_state`, and sends one localized message containing that table and the three advice sections.
 9. The successful response message ends with the cooldown-period text and includes an inline `get_ai_advice` button for the next request.
 10. If the Gemini request fails, the handler stops the draft and sends a localized error message.
 

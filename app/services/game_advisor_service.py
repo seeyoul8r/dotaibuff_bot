@@ -4,21 +4,14 @@ import uuid
 
 from google import genai
 from google.genai import types
-from pydantic import BaseModel
 
 from app.ai.prompts import GAME_ADVISOR_PROMPT
 from app.bot.messages import mes_user
 from app.cache.redis_cache import redis_cache
 from app.core.config import AIConfig, LoggingConfig, load_ai_config, load_logging_config
 from app.repositories.ai_request_repository import ai_request_repository
+from app.schemas.ai import GameAdvice
 from app.services.dota_data_service import dota_data_service
-
-
-class GameAdvice(BaseModel):
-    """Structured Dota game advice."""
-    macro_gaming: str
-    build: str
-    micro_gaming: str
 
 
 class GameAdvisorService:
@@ -186,6 +179,7 @@ class GameAdvisorService:
                 # Use game clock delta so advice can reason about map absence during the current match.
                 seen_seconds_ago = max(0, int(current_game_time - last_seen_game_time))
             enemy_positions[hero_name] = self.remove_empty_state_values({
+                'was_visible': hero_state.get('was_visible', False),
                 'visible': hero_state.get('visible', False),
                 'last_seen_location': hero_state.get('last_seen_location', 'unknown'),
                 'last_seen_game_time': last_seen_game_time,
