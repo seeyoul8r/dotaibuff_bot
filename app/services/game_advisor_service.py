@@ -80,8 +80,91 @@ class GameAdvisorService:
         }
         return {
             'language': 'Russian' if lang == 'ru' else 'English',
-            'match_state': match_state,
+            'match_state': self.compact_match_state(match_state),
             'dota_context': dota_context
+        }
+
+    def compact_match_state(self, match_state: dict):
+        """Return compact match state for AI prompt."""
+        return self.remove_empty_state_values({
+            'match_id': match_state.get('match_id'),
+            'game_state': match_state.get('game_state'),
+            'clock_time': match_state.get('clock_time'),
+            'radiant_score': match_state.get('radiant_score'),
+            'dire_score': match_state.get('dire_score'),
+            'daytime': match_state.get('daytime'),
+            'paused': match_state.get('paused'),
+            'win_team': match_state.get('win_team'),
+            'player': self.compact_player(match_state.get('player', {})),
+            'hero': self.compact_local_hero(match_state.get('hero', {})),
+            'abilities': self.compact_match_abilities(match_state.get('abilities', {})),
+            'items': self.compact_match_items(match_state.get('items', {})),
+            'buildings': match_state.get('buildings', {}),
+            'radiant': self.compact_team(match_state.get('radiant', {})),
+            'dire': self.compact_team(match_state.get('dire', {}))
+        })
+
+    def compact_player(self, player: dict):
+        """Return compact local player state."""
+        return self.remove_empty_state_values({
+            'team_name': player.get('team_name'),
+            'gold': player.get('gold'),
+            'gold_reliable': player.get('gold_reliable'),
+            'gold_unreliable': player.get('gold_unreliable'),
+            'kills': player.get('kills'),
+            'deaths': player.get('deaths'),
+            'assists': player.get('assists'),
+            'last_hits': player.get('last_hits'),
+            'denies': player.get('denies'),
+            'kill_streak': player.get('kill_streak')
+        })
+
+    def compact_local_hero(self, hero: dict):
+        """Return compact local hero state."""
+        return self.remove_empty_state_values({
+            'name': hero.get('name'),
+            'level': hero.get('level'),
+            'alive': hero.get('alive'),
+            'respawn_seconds': hero.get('respawn_seconds'),
+            'health': hero.get('health'),
+            'max_health': hero.get('max_health'),
+            'mana': hero.get('mana'),
+            'max_mana': hero.get('max_mana'),
+            'has_debuff': hero.get('has_debuff'),
+            'selected_unit': hero.get('selected_unit')
+        })
+
+    def compact_match_abilities(self, abilities: dict):
+        """Return compact current ability state."""
+        return {
+            slot: self.remove_empty_state_values({
+                'name': ability.get('name'),
+                'level': ability.get('level'),
+                'can_cast': ability.get('can_cast'),
+                'passive': ability.get('passive'),
+                'cooldown': ability.get('cooldown'),
+                'ultimate': ability.get('ultimate')
+            })
+            for slot, ability in abilities.items()
+        }
+
+    def compact_match_items(self, items: dict):
+        """Return compact current item state."""
+        return {
+            slot: self.remove_empty_state_values({
+                'name': item.get('name'),
+                'can_cast': item.get('can_cast'),
+                'cooldown': item.get('cooldown'),
+                'charges': item.get('charges'),
+                'purchaser': item.get('purchaser')
+            })
+            for slot, item in items.items()
+        }
+
+    def compact_team(self, team: dict):
+        """Return compact team roster state."""
+        return {
+            'heroes': list(team.get('heroes', {}))
         }
 
     def get_hero_mechanics_scope(
@@ -167,6 +250,14 @@ class GameAdvisorService:
             key: item
             for key, item in value.items()
             if item not in (None, [], {}, False)
+        }
+
+    def remove_empty_state_values(self, value: dict):
+        """Return state dict without empty values."""
+        return {
+            key: item
+            for key, item in value.items()
+            if item not in (None, [], {})
         }
 
     def get_roster_hero_names(self, match_state: dict):
