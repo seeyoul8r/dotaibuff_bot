@@ -45,6 +45,7 @@ class GameAdvisorService:
         local_team_name = match_state['player'].get('team_name')
         opponent_team_name = {'radiant': 'dire', 'dire': 'radiant'}.get(local_team_name)
         enemy_hero_names = set(match_state[opponent_team_name]['heroes']) if opponent_team_name else set()
+        allied_hero_names = set(match_state[local_team_name]['heroes']) if local_team_name in ('radiant', 'dire') else set()
         local_hero_counters = dota_data['hero_counters'].get(local_hero_name, {})
         relevant_counters = {
             enemy_hero_name: local_hero_counters[enemy_hero_name]
@@ -62,7 +63,10 @@ class GameAdvisorService:
                 if hero_name in dota_data['heroes']
             },
             'hero_mechanics': {
-                hero_name: dota_data['hero_mechanics'][hero_name]
+                hero_name: self.compact_hero_mechanics(
+                    dota_data['hero_mechanics'][hero_name],
+                    self.get_hero_mechanics_scope(hero_name, local_hero_name, allied_hero_names, enemy_hero_names)
+                )
                 for hero_name in hero_names
                 if hero_name in dota_data['hero_mechanics']
             },
@@ -83,6 +87,91 @@ class GameAdvisorService:
             'language': 'Russian' if lang == 'ru' else 'English',
             'match_state': match_state,
             'dota_context': dota_context
+        }
+
+    def get_hero_mechanics_scope(
+            self, hero_name: str, local_hero_name: str | None, allied_hero_names: set, enemy_hero_names: set):
+        """Return mechanics detail scope for a match hero."""
+        if hero_name == local_hero_name:
+            return 'local'
+        if hero_name in enemy_hero_names:
+            return 'enemy'
+        if hero_name in allied_hero_names:
+            return 'ally'
+        return 'ally'
+
+    def compact_hero_mechanics(self, hero_mechanics: dict, scope: str):
+        """Return compact hero mechanics for AI prompt."""
+        compact = {
+            'name': hero_mechanics.get('name'),
+            'name_loc': hero_mechanics.get('name_loc'),
+            'abilities': [
+                self.compact_ability_or_item(ability)
+                for ability in hero_mechanics.get('abilities', [])
+            ],
+            'shard': [
+                self.compact_ability_or_item(ability)
+                for ability in hero_mechanics.get('shard', [])
+            ],
+            'scepter': [
+                self.compact_ability_or_item(ability)
+                for ability in hero_mechanics.get('scepter', [])
+            ]
+        }
+        if scope == 'local':
+            # Keep local talents because build advice is only for the user's hero.
+            compact['talents'] = [
+                self.compact_ability_or_item(talent)
+                for talent in hero_mechanics.get('talents', [])
+            ]
+            compact['facets'] = hero_mechanics.get('facets', [])
+        return self.remove_empty_values(compact)
+
+    def compact_ability_or_item(self, ability: dict):
+        """Return compact ability or item mechanics."""
+        compact = {
+            'name': ability.get('name'),
+            'name_loc': ability.get('name_loc'),
+            'desc_loc': ability.get('desc_loc'),
+            'shard_loc': ability.get('shard_loc'),
+            'scepter_loc': ability.get('scepter_loc'),
+            'behavior': ability.get('behavior'),
+            'damage': ability.get('damage'),
+            'immunity': ability.get('immunity'),
+            'dispellable': ability.get('dispellable'),
+            'cast_ranges': ability.get('cast_ranges'),
+            'cooldowns': ability.get('cooldowns'),
+            'durations': ability.get('durations'),
+            'damages': ability.get('damages'),
+            'mana_costs': ability.get('mana_costs'),
+            'item_cost': ability.get('item_cost'),
+            'special_values': self.compact_special_values(ability.get('special_values', [])),
+            'ability_is_innate': ability.get('ability_is_innate')
+        }
+        return self.remove_empty_values(compact)
+
+    def compact_special_values(self, special_values: list):
+        """Return compact non-empty special values."""
+        compact_values = []
+        for special_value in special_values:
+            compact_value = {
+                'name': special_value.get('name'),
+                'heading_loc': special_value.get('heading_loc'),
+                'values_float': special_value.get('values_float'),
+                'values_shard': special_value.get('values_shard'),
+                'values_scepter': special_value.get('values_scepter'),
+                'facet_bonus': special_value.get('facet_bonus')
+            }
+            # Keep only values that can affect the model's fight or build reasoning.
+            compact_values.append(self.remove_empty_values(compact_value))
+        return [value for value in compact_values if value]
+
+    def remove_empty_values(self, value: dict):
+        """Return dict without empty values."""
+        return {
+            key: item
+            for key, item in value.items()
+            if item not in (None, [], {}, False)
         }
 
     def get_roster_hero_names(self, match_state: dict):

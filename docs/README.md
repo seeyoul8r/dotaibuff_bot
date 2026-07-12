@@ -283,6 +283,8 @@ gsi:match_state:{user_id}:{match_id}
 
 `hero_win_rates` covers every hero in the match roster. `local_hero_counters` and `local_hero_builds` are scoped to the local hero only: counters are filtered to the current enemy lineup, and builds are the local hero's own STRATZ item/ability/talent data — matching how `local_items` already scopes mechanics to the local inventory.
 
+`hero_mechanics` is prompt-optimized by `GameAdvisorService.compact_hero_mechanics()` before sending to AI. The local hero keeps abilities, shard, scepter, talents, and facets. Allied and enemy heroes keep abilities, shard, and scepter so the model can reason about teamfight coordination and enemy threats without sending talent data or empty technical fields.
+
 5. `GameAdvisorService.request_advice()` serializes the contents once and, when enabled, writes the exact request fields to `data/ai_requests`.
 6. The service sends the JSON and `GAME_ADVISOR_PROMPT` to `gemini-3.5-flash` with the configured thinking level.
 7. The Google Gen AI SDK parses the JSON response directly into `GameAdvice`.
