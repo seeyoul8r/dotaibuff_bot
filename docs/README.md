@@ -257,6 +257,10 @@ gsi:match_state:{user_id}:{match_id}
 
 `gsi:match_state:{user_id}:{match_id}` stores the accumulated normalized match state.
 
+## User Menu Flow
+
+The main user menu contains `GSI config`, `Get AI recommendation`, and the language toggle. `open_gsi_menu` edits only the existing message reply markup and shows `Get GSI config`, `What is GSI config?`, and `Back`. Opening this submenu must not call `ClientLinkService`, because `get_gsi_config` regenerates the long-lived client token and config file only when the user explicitly presses the download button. `back_to_main_menu` restores the main menu with `edit_reply_markup`.
+
 ## AI Advice Flow
 
 1. The Telegram handler verifies that accumulated match state exists.

@@ -1,7 +1,7 @@
 import asyncio
 import logging
 
-from aiogram import Bot, Router
+from aiogram import Bot, F, Router
 from aiogram.filters import CommandStart
 from aiogram.types import BufferedInputFile, CallbackQuery, Message
 
@@ -17,6 +17,8 @@ logger = logging.getLogger(__name__)
 user_router = Router()
 GET_GSI_CONFIG = 'get_gsi_config'
 WHAT_IS_GSI_CONFIG = 'what_is_gsi_config'
+OPEN_GSI_MENU = 'open_gsi_menu'
+BACK_TO_MAIN_MENU = 'back_to_main_menu'
 GET_AI_ADVICE = 'get_ai_advice'
 CHANGE_LANGUAGE = 'change_language'
 DRAFT_UPDATE_INTERVAL = 20
@@ -37,6 +39,16 @@ async def start(message: Message):
     await user_repository.save_user(message.from_user.id, message.from_user.first_name, message.from_user.username, lang)
     # Show localized user actions for GSI config and advice preview.
     await message.answer(text=mes_user[lang].start_text, reply_markup=kb_user[lang].mainMenu)
+
+
+@user_router.callback_query(F.data.in_({OPEN_GSI_MENU, BACK_TO_MAIN_MENU}))
+async def switch_user_menu(callback: CallbackQuery):
+    """Switch user inline menu."""
+    lang = await user_repository.get_user_lang(callback.from_user.id)
+    reply_markup = kb_user[lang].gsiMenu if callback.data == OPEN_GSI_MENU else kb_user[lang].mainMenu
+    # Redraw only buttons so menu navigation does not regenerate the client link token.
+    await callback.message.edit_reply_markup(reply_markup=reply_markup)
+    await callback.answer()
 
 
 @user_router.callback_query(lambda callback: callback.data == GET_GSI_CONFIG)

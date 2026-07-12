@@ -20,7 +20,10 @@
 - Start or restart Dota 2.
 - If the config was already installed before, download it again and replace the old file.
 - When a match starts and the bot receives the first GSI snapshot with match id, it sends a notification.
-- Press `What is GSI config?` for a short installation guide.
+- Press `GSI config` in the main menu to open GSI actions.
+- Press `Get GSI config` inside the GSI submenu only when you need to download or replace the config file.
+- Press `What is GSI config?` inside the GSI submenu for a short installation guide.
+- Press `Back` to return to the main menu.
 
 ## AI recommendation
 
@@ -36,5 +39,5 @@
 
 ## Language
 
-- Press `Русский` to switch the interface to Russian.
+- Press `Lang: RU` to switch the interface to Russian.
 - The selected language is saved in user settings.

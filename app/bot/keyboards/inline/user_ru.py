@@ -1,17 +1,24 @@
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 
-getGsiConfigBtn = InlineKeyboardButton(text='Получить GSI config', callback_data='get_gsi_config')
-whatIsGsiConfigBtn = InlineKeyboardButton(text='Что такое GSI-конфиг?', callback_data='what_is_gsi_config')
-getAiAdviceBtn = InlineKeyboardButton(text='Получить рекомендацию ИИ', callback_data='get_ai_advice')
+getGsiConfigBtn = InlineKeyboardButton(text='\u041f\u043e\u043b\u0443\u0447\u0438\u0442\u044c GSI config', callback_data='get_gsi_config')
+whatIsGsiConfigBtn = InlineKeyboardButton(text='\u0427\u0442\u043e \u0442\u0430\u043a\u043e\u0435 GSI-\u043a\u043e\u043d\u0444\u0438\u0433?', callback_data='what_is_gsi_config')
+openGsiMenuBtn = InlineKeyboardButton(text='GSI-\u043a\u043e\u043d\u0444\u0438\u0433', callback_data='open_gsi_menu')
+backToMainMenuBtn = InlineKeyboardButton(text='\u041d\u0430\u0437\u0430\u0434', callback_data='back_to_main_menu')
+getAiAdviceBtn = InlineKeyboardButton(text='\u041f\u043e\u043b\u0443\u0447\u0438\u0442\u044c \u0440\u0435\u043a\u043e\u043c\u0435\u043d\u0434\u0430\u0446\u0438\u044e \u0418\u0418', callback_data='get_ai_advice')
 newAiAdviceBtn = InlineKeyboardButton(text='\u041d\u043e\u0432\u044b\u0439 \u0437\u0430\u043f\u0440\u043e\u0441', callback_data='get_ai_advice')
-changeLanguageBtn = InlineKeyboardButton(text='English', callback_data='change_language')
+changeLanguageBtn = InlineKeyboardButton(text='Lang: EN', callback_data='change_language')
 
 mainMenu = InlineKeyboardMarkup(inline_keyboard=[
-    [getGsiConfigBtn],
-    [whatIsGsiConfigBtn],
+    [openGsiMenuBtn],
     [getAiAdviceBtn],
     [changeLanguageBtn]
+])
+
+gsiMenu = InlineKeyboardMarkup(inline_keyboard=[
+    [getGsiConfigBtn],
+    [whatIsGsiConfigBtn],
+    [backToMainMenuBtn]
 ])
 
 afterAdviceMenu = InlineKeyboardMarkup(inline_keyboard=[
