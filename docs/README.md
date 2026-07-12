@@ -17,7 +17,7 @@ DotAIBuffBot is a Telegram bot plus local FastAPI service for collecting Dota 2 
    It locks the exact 5v5 roster from minimap positions when the local hero and at least 10 hero markers are visible: local hero plus the nearest 4 heroes are allies, and the next 5 heroes are enemies.
 11. `DotaDataService` loads OpenDota, dota2.com datafeed, and STRATZ data from the local cache file on startup, or fetches it once if no cache exists yet.
 12. The recommendation button combines normalized match state with relevant Dota mechanics context and calls Gemini.
-13. When `LOG_REQUESTS=1`, the exact model request fields are written before the Gemini call.
+13. When `LOG_REQUESTS=1`, the exact model request fields are written to SQLite before the Gemini call and updated with the response or error after the call.
 14. The bot sends macro gaming, build, and current micro gaming advice as three Telegram messages.
 
 ## Main Components
@@ -59,15 +59,9 @@ data/gsi_snapshots/{session_id}_{user_id}_{match_id}.jsonl
 
 Each line is one JSON object with `saved_at`, `user_id`, `match_id`, and sanitized `payload`. Before writing to disk, `GsiSnapshotLogService` removes `previously`, `added`, and `auth` from the saved payload. Full incoming payloads are still passed to match processing before sanitizing for disk. With `LOG_REQUESTS=0`, the service creates no directory or file. These files are for analysis only and are ignored by Git.
 
-`app/services/ai_request_log_service.py`
+`app/repositories/ai_request_repository.py`
 
-When `LOG_REQUESTS=1`, appends each Gemini request before it is sent to:
-
-```text
-data/ai_requests/{session_id}_{user_id}_{match_id}.jsonl
-```
-
-Each line contains `timestamp`, `user_id`, `match_id`, `model`, the exact serialized `contents`, `system_instruction`, response MIME/schema settings, and `thinking_level`. API keys are never included. With `LOG_REQUESTS=0`, the service creates no directory or file.
+Stores the Gemini request lifecycle in SQLite when `LOG_REQUESTS=1`. `GameAdvisorService` creates one `ai_requests` row before the Gemini call with status `started`, then updates the same row to `completed` with the parsed response or to `failed` with the error text. API keys are never stored. With `LOG_REQUESTS=0`, no AI request log row is created.
 
 `app/services/match_state_service.py`
 
@@ -296,7 +290,7 @@ Raw OpenDota hero definitions are not sent to AI. Hero identity comes from `matc
 
 `local_items` is also compacted with `GameAdvisorService.compact_ability_or_item()` so item descriptions, cooldowns, costs, behavior, and special values remain available without empty ability flags.
 
-5. `GameAdvisorService.request_advice()` serializes the contents once and, when enabled, writes the exact request fields to `data/ai_requests`.
+5. `GameAdvisorService.request_advice()` serializes the contents once and, when enabled, writes the exact request fields to the `ai_requests` SQLite table.
 6. The service sends the JSON and `GAME_ADVISOR_PROMPT` to `gemini-3.5-flash` with the configured thinking level.
 7. The Google Gen AI SDK parses the JSON response directly into `GameAdvice`.
 8. The handler stops the ephemeral draft and sends one localized message containing the three schema fields.
@@ -321,6 +315,29 @@ gsi_token
 created_at
 updated_at
 ```
+
+`ai_requests`
+
+Stores one Gemini advice request lifecycle per generated `request_id` when `LOG_REQUESTS=1`:
+
+```text
+request_id
+user_id
+match_id
+request_started_at
+request
+response_finished_at
+response
+model
+system_instruction
+response_mime_type
+response_schema
+thinking_level
+status
+error
+```
+
+`status` starts as `started`, changes to `completed` after a parsed `GameAdvice` response is saved, and changes to `failed` when the Gemini call raises an exception.
 
 ## Local Runtime
 
@@ -374,7 +391,7 @@ STRATZ_API_TOKEN=Bearer ...
 
 `STRATZ_API_TOKEN` is the Bearer token from a STRATZ account API key (`stratz.com`, logged in via Steam) and must include the `Bearer ` prefix — `DotaDataService` sends it as-is in the `Authorization` header.
 
-`LOG_REQUESTS=1` enables both sanitized GSI snapshot files and exact AI request files. Set it to `0` to disable both file writers. The value is read on process startup.
+`LOG_REQUESTS=1` enables sanitized GSI snapshot files and exact AI request rows in SQLite. Set it to `0` to disable both request log writers. The value is read on process startup.
 
 `GSI_HOST`/`GSI_PORT`/`DOTA_DATA_HOST`/`DOTA_DATA_PORT` and `GSI_PUBLIC_URL` all default to the values above, so an `.env` without them keeps today's local-only behavior unchanged.
 
@@ -460,7 +477,7 @@ OpenDota provides patch metadata through `constants/patch`, but not full patch n
 - Per-match Redis cleanup is not implemented yet.
 - AI recommendations require a valid `GEMINI_API_KEY` and current accumulated match state.
 - The recommendation cooldown is local to one bot process and is not shared through Redis.
-- Request log files are development artifacts and can grow until they are removed manually.
+- Request logs are development artifacts. GSI snapshot files and `ai_requests` SQLite rows can grow until they are removed manually.
 - STRATZ data (`hero_win_rates`/`hero_counters`/`hero_builds`) is an all-bracket, all-position aggregate; rank/role filtering is not implemented yet.
 
 ## Next Architecture Step

@@ -70,6 +70,25 @@ class Database:
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         ''')
+        # Store full AI advice request lifecycle for later analysis.
+        await conn.execute('''
+            CREATE TABLE IF NOT EXISTS ai_requests (
+                request_id TEXT PRIMARY KEY,
+                user_id INTEGER NOT NULL,
+                match_id INTEGER,
+                request_started_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                request TEXT NOT NULL,
+                response_finished_at DATETIME,
+                response TEXT,
+                model TEXT NOT NULL,
+                system_instruction TEXT NOT NULL,
+                response_mime_type TEXT NOT NULL,
+                response_schema TEXT NOT NULL,
+                thinking_level TEXT NOT NULL,
+                status TEXT NOT NULL,
+                error TEXT
+            )
+        ''')
         await conn.commit()
 
 

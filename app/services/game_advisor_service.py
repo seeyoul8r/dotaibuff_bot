@@ -1,5 +1,6 @@
 import json
 import time
+import uuid
 
 from google import genai
 from google.genai import types
@@ -8,8 +9,8 @@ from pydantic import BaseModel
 from app.ai.prompts import GAME_ADVISOR_PROMPT
 from app.bot.messages import mes_user
 from app.cache.redis_cache import redis_cache
-from app.core.config import AIConfig, load_ai_config
-from app.services.ai_request_log_service import ai_request_log_service
+from app.core.config import AIConfig, LoggingConfig, load_ai_config, load_logging_config
+from app.repositories.ai_request_repository import ai_request_repository
 from app.services.dota_data_service import dota_data_service
 
 
@@ -25,6 +26,7 @@ class GameAdvisorService:
         """Store AI advisor configuration."""
         self.prompt = GAME_ADVISOR_PROMPT
         self.config: AIConfig = load_ai_config()
+        self.logging_config: LoggingConfig = load_logging_config()
         # Reuse one async Gemini client and its HTTP connections for all advice requests.
         self.client = genai.Client(api_key=self.config.api_key).aio
         # Keep cooldowns in the current bot process, matching the existing manager pattern.
@@ -274,29 +276,45 @@ class GameAdvisorService:
         contents = json.dumps(prompt_data, ensure_ascii=False)
         response_mime_type = 'application/json'
         response_schema = GameAdvice.model_json_schema()
-        # Persist the exact request fields before sending them to Gemini.
-        await ai_request_log_service.save_request(
-            user_id=user_id,
-            match_id=prompt_data['match_state'].get('match_id'),
-            model=self.config.model,
-            contents=contents,
-            system_instruction=self.prompt,
-            response_mime_type=response_mime_type,
-            response_schema=response_schema,
-            thinking_level=self.config.thinking_level
-        )
-        # Parse schema-constrained output directly without splitting free-form model text.
-        response = await self.client.models.generate_content(
-            model=self.config.model,
-            contents=contents,
-            config=types.GenerateContentConfig(
+        request_id = uuid.uuid4().hex
+        if self.logging_config.log_requests:
+            # Persist the exact request fields before sending them to Gemini.
+            await ai_request_repository.create_request(
+                request_id=request_id,
+                user_id=user_id,
+                match_id=prompt_data['match_state'].get('match_id'),
+                request=contents,
+                model=self.config.model,
                 system_instruction=self.prompt,
                 response_mime_type=response_mime_type,
-                response_schema=GameAdvice,
-                thinking_config=types.ThinkingConfig(thinking_level=self.config.thinking_level)
+                response_schema=json.dumps(response_schema, ensure_ascii=False),
+                thinking_level=self.config.thinking_level
             )
-        )
-        return response.parsed
+        try:
+            # Parse schema-constrained output directly without splitting free-form model text.
+            response = await self.client.models.generate_content(
+                model=self.config.model,
+                contents=contents,
+                config=types.GenerateContentConfig(
+                    system_instruction=self.prompt,
+                    response_mime_type=response_mime_type,
+                    response_schema=GameAdvice,
+                    thinking_config=types.ThinkingConfig(thinking_level=self.config.thinking_level)
+                )
+            )
+            advice = response.parsed
+            if self.logging_config.log_requests:
+                # Store the parsed structured response in the same request row.
+                await ai_request_repository.save_response(
+                    request_id,
+                    json.dumps(advice.model_dump(), ensure_ascii=False)
+                )
+            return advice
+        except Exception as error:
+            if self.logging_config.log_requests:
+                # Store failed Gemini request status before passing the error to the handler.
+                await ai_request_repository.save_error(request_id, str(error))
+            raise
 
     def is_on_cooldown(self, user_id: int):
         """Return remaining advice cooldown seconds."""
