@@ -2,6 +2,7 @@ import logging
 from datetime import UTC, datetime
 
 from app.cache.redis_cache import redis_cache
+from app.services.map_location_service import map_location_service
 from app.schemas.match_state import MatchHeroState
 
 
@@ -271,38 +272,11 @@ class MatchStateService:
             hero_state['last_seen_at'] = now
             hero_state['last_seen_game_time'] = match_state.get('clock_time')
             hero_state['last_seen_position'] = minimap_hero['position']
-            hero_state['last_seen_location'] = self.get_map_location(minimap_hero['position'])
+            hero_state['last_seen_location_slug'] = map_location_service.get_location_slug(
+                minimap_hero['position'].get('xpos'),
+                minimap_hero['position'].get('ypos')
+            )
             hero_state['last_seen_image'] = minimap_hero['image']
-
-    def get_map_location(self, position: dict):
-        """Return simple map area name for minimap coordinates."""
-        xpos = position.get('xpos')
-        ypos = position.get('ypos')
-        if not isinstance(xpos, (int, float)) or not isinstance(ypos, (int, float)):
-            return 'unknown'
-
-        # GSI minimap coordinates are normalized from the bottom-left to the top-right map corner.
-        if xpos < 0.18 and ypos < 0.18:
-            return 'radiant base'
-        if xpos > 0.82 and ypos > 0.82:
-            return 'dire base'
-        if xpos > 0.55 and ypos < 0.45:
-            return 'radiant triangle'
-        if xpos < 0.45 and ypos > 0.55:
-            return 'dire triangle'
-        if 0.30 <= xpos <= 0.70 and 0.30 <= ypos <= 0.70 and abs((xpos + ypos) - 1) < 0.12:
-            return 'river'
-        if abs(xpos - ypos) < 0.08:
-            return 'mid lane'
-        if ypos > 0.68 and xpos < 0.62:
-            return 'top lane'
-        if xpos > 0.68 and ypos < 0.62:
-            return 'bot lane'
-        if xpos > 0.58 and ypos > 0.58:
-            return 'dire jungle'
-        if xpos < 0.42 and ypos < 0.42:
-            return 'radiant jungle'
-        return 'unknown'
 
     def pop_hero(self, match_state: dict, hero_name: str):
         """Remove hero from current match state buckets."""

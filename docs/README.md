@@ -99,7 +99,7 @@ Current hero sources:
 - allied heroes from `minimap_herocircle`, `minimap_herocircle_self`, and `minimap_heroinvis`;
 - enemy heroes from `minimap_enemyicon`;
 - draft hero pool from unique `minimap_plaincircle` names before the roster is locked;
-- after the roster is locked, the last visible enemy position, map location, game time, and current visibility are stored for locked enemy heroes.
+- after the roster is locked, the last visible enemy position, calibrated map location slug, game time, and current visibility are stored for locked enemy heroes.
 
 `minimap_plaincircle.team` and draft-layout coordinates are not reliable. Team assignment therefore follows this sequence:
 
@@ -116,14 +116,18 @@ Enemy position fields stored inside each locked enemy hero state:
 {
   "was_visible": true,
   "visible": true,
-  "last_seen_position": {"xpos": 0.71, "ypos": 0.34},
-  "last_seen_location": "bot lane",
+  "last_seen_position": {"xpos": -3679, "ypos": -1683},
+  "last_seen_location_slug": "radiant_triangle",
   "last_seen_game_time": 645,
   "last_seen_image": "minimap_enemyicon"
 }
 ```
 
-`last_seen_location` is a simple coordinate-based area label such as `top lane`, `mid lane`, `bot lane`, `radiant jungle`, `dire jungle`, `radiant triangle`, `dire triangle`, `river`, `radiant base`, `dire base`, or `unknown`.
+`last_seen_location_slug` is returned by `MapLocationService` from calibrated Dota map coordinates. It currently covers only calibrated areas from recorded GSI snapshots; uncalibrated coordinates return `unknown`.
+
+`app/services/map_location_service.py`
+
+Maps raw GSI minimap coordinates to stable location slugs by nearest calibrated point with a per-point radius. The service returns slugs only; user-facing text is localized in `app/bot/messages/user_ru.py` and `app/bot/messages/user_en.py`.
 
 The `8892275624` recording demonstrated this flow for two users on Radiant. Sven and Night Stalker both locked the same allied roster: Sven, Night Stalker, Disruptor, Grimstroke, and Medusa. Bloodseeker, Nyx Assassin, Oracle, Sniper, and Spectre were assigned to Dire.
 
@@ -144,6 +148,10 @@ Stores environment config dataclasses. `app/core/config.py` only reads environme
 `app/schemas/match_state.py`
 
 Stores accumulated match state schemas such as `MatchHeroState`. `MatchHeroState` is converted to a dict before Redis storage.
+
+`app/schemas/map_location.py`
+
+Stores map location calibration schemas such as `MapLocationPoint`.
 
 `app/ai/prompts.py`
 
@@ -309,7 +317,7 @@ The main user menu contains `GSI config`, `Get AI recommendation`, and the langu
 
 `hero_win_rates` covers every hero in the match roster. `local_hero_counters` and `local_hero_builds` are scoped to the local hero only: counters are filtered to the current enemy lineup, and builds are the local hero's own STRATZ item/ability/talent data — matching how `local_items` already scopes mechanics to the local inventory.
 
-`match_state` is compacted before sending to AI. The Redis state keeps timestamps, source history, roster-lock metadata, enemy visibility, and full hero buckets. The prompt receives current match time, score, local player state, local hero state, current abilities/items, buildings, Radiant/Dire hero name lists, and `enemy_positions` with all locked enemy heroes, last seen location, coordinates, game time, and `seen_seconds_ago`.
+`match_state` is compacted before sending to AI. The Redis state keeps timestamps, source history, roster-lock metadata, enemy visibility, and full hero buckets. The prompt receives current match time, score, local player state, local hero state, current abilities/items, buildings, Radiant/Dire hero name lists, and `enemy_positions` with all locked enemy heroes, last seen location slug, coordinates, game time, and `seen_seconds_ago`.
 
 Raw OpenDota hero definitions are not sent to AI. Hero identity comes from `match_state`, while combat details come from `hero_mechanics`, win rates, counters, and builds.
 

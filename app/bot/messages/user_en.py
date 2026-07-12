@@ -42,6 +42,31 @@ dire_label = 'Dire'
 language_changed = 'Language changed.'
 enemy_map_info_title = 'Enemy map info'
 enemy_map_info_header = 'Hero | Last seen | Time'
+map_location_names = {
+    'unknown': 'unknown',
+    'radiant_fountain': 'Radiant fountain',
+    'radiant_throne': 'Radiant throne',
+    'radiant_t4': 'Radiant T4',
+    'radiant_mid_t3': 'Radiant mid T3',
+    'radiant_mid_t2': 'Radiant mid T2',
+    'radiant_mid_t1': 'Radiant mid T1',
+    'mid_river': 'mid river',
+    'dire_mid_t1': 'Dire mid T1',
+    'dire_mid_t2': 'Dire mid T2',
+    'radiant_triangle': 'Radiant triangle',
+    'radiant_offlane_t2': 'Radiant offlane T2',
+    'radiant_offlane_t1': 'Radiant offlane T1',
+    'radiant_wisdom_rune': 'Radiant wisdom rune',
+    'radiant_offlane_jungle': 'Radiant offlane jungle',
+    'radiant_offlane_bridge': 'Radiant offlane bridge',
+    'dire_lotus_pool': 'Dire lotus pool',
+    'dire_tormentor': 'Dire tormentor',
+    'dire_twin_gate': 'Dire twin gate',
+    'dire_safelane_jungle': 'Dire safelane jungle',
+    'dire_safelane_t3': 'Dire safelane T3',
+    'dire_safelane_t2': 'Dire safelane T2',
+    'dire_safelane_forest': 'Dire safelane forest'
+}
 macro_advice_title = 'Macro gaming'
 build_advice_title = 'Build'
 micro_advice_title = 'Micro gaming: current priority'

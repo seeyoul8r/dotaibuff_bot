@@ -12,7 +12,7 @@ class MatchHeroState:
     visible: bool = False
     last_seen_game_time: int | None = None
     last_seen_position: dict | None = None
-    last_seen_location: str = 'unknown'
+    last_seen_location_slug: str = 'unknown'
     last_seen_image: str | None = None
 
     def to_dict(self):

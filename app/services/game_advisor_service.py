@@ -181,7 +181,7 @@ class GameAdvisorService:
             enemy_positions[hero_name] = self.remove_empty_state_values({
                 'was_visible': hero_state.get('was_visible', False),
                 'visible': hero_state.get('visible', False),
-                'last_seen_location': hero_state.get('last_seen_location', 'unknown'),
+                'last_seen_location_slug': hero_state.get('last_seen_location_slug', 'unknown'),
                 'last_seen_game_time': last_seen_game_time,
                 'seen_seconds_ago': seen_seconds_ago,
                 'last_seen_position': hero_state.get('last_seen_position')

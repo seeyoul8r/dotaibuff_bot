@@ -154,7 +154,9 @@ def format_enemy_map_info(match_state: dict, lang: str):
             continue
         seen_time = mes_user[lang].enemy_seen_time(hero_state.get('visible', False), seen_seconds_ago)
         hero_title = dota_data['heroes'][hero_name]['definition']['localized_name']
-        lines.append(f'{hero_title} | {hero_state.get("last_seen_location", "unknown")} | {seen_time}')
+        location_slug = hero_state.get('last_seen_location_slug', 'unknown')
+        location_title = mes_user[lang].map_location_names[location_slug]
+        lines.append(f'{hero_title} | {location_title} | {seen_time}')
 
     if not lines:
         return ''
