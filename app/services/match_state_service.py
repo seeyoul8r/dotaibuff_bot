@@ -15,11 +15,12 @@ class HeroTeamDetector:
         if player_team_name not in ('radiant', 'dire') or local_hero_name is None:
             return
 
-        # Accumulate draft heroes because later live snapshots can stop sending plain circles.
-        for hero_name in self.get_plaincircle_heroes(minimap_heroes):
-            self.apply_hero(match_state, hero_name, None, 'minimap_plaincircle', now)
+        plaincircle_heroes = self.get_plaincircle_heroes(minimap_heroes)
+        if len(plaincircle_heroes) == 10:
+            # Keep the latest exact draft roster and ignore later stale showcase heroes.
+            match_state['draft_heroes'] = list(plaincircle_heroes)
 
-        draft_heroes = set(match_state['unknown_heroes'])
+        draft_heroes = set(match_state['draft_heroes'])
         live_allied_heroes = self.get_live_allied_heroes(minimap_heroes)
         if local_hero_name not in live_allied_heroes:
             return
@@ -34,6 +35,7 @@ class HeroTeamDetector:
         match_state['radiant']['heroes'] = {}
         match_state['dire']['heroes'] = {}
         match_state['unknown_heroes'] = {}
+        match_state['draft_heroes'] = []
         for hero_name in live_allied_heroes:
             self.apply_hero(match_state, hero_name, player_team_name, 'locked_minimap', now)
         for hero_name in enemy_heroes:
@@ -193,6 +195,7 @@ class MatchStateService:
             'radiant': {'heroes': {}},
             'dire': {'heroes': {}},
             'unknown_heroes': {},
+            'draft_heroes': [],
             'roster_locked': False,
             'enemy_detection_ready': False,
             'created_at': datetime.now(UTC).isoformat(),
@@ -203,7 +206,7 @@ class MatchStateService:
         """Extract local player hero from GSI snapshot."""
         hero_name = payload.get('hero', {}).get('name')
         team_name = payload.get('player', {}).get('team_name')
-        if hero_name is None:
+        if not isinstance(hero_name, str) or not hero_name.startswith('npc_dota_hero_'):
             return None
         return {
             'hero_name': hero_name,

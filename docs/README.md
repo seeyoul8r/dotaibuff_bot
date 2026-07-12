@@ -110,13 +110,15 @@ Current hero sources:
 `minimap_plaincircle.team` and draft-layout coordinates are not reliable. Team assignment therefore follows this sequence:
 
 1. `player.team_name` defines the local and opposing teams.
-2. `HeroTeamDetector` accumulates unique `minimap_plaincircle` hero names into `unknown_heroes` as the draft pool.
+2. `HeroTeamDetector` stores the latest snapshot with exactly 10 unique `minimap_plaincircle` hero names in `draft_heroes` as the draft pool.
 3. Live allied markers from `minimap_herocircle`, `minimap_herocircle_self`, and `minimap_heroinvis` build the local team candidate.
 4. The roster is locked only when the draft pool has exactly 10 unique heroes, the live allied candidate has exactly 5 unique heroes, and the local hero is one of those 5.
 5. The 5 live allied heroes are assigned to the local player's team, and the remaining 5 draft heroes are assigned to the opposing team.
 6. After `roster_locked = true`, minimap hero roster detection stops changing team membership.
 
 The `8892275624` recording demonstrated this flow for two users on Radiant. Sven and Night Stalker both locked the same allied roster: Sven, Night Stalker, Disruptor, Grimstroke, and Medusa. Bloodseeker, Nyx Assassin, Oracle, Sniper, and Spectre were assigned to Dire.
+
+The `8893000272` recording showed why the draft pool is stored only from exact 10-hero snapshots. Later pre-game minimap snapshots contained stale showcase heroes such as Axe and Venomancer; keeping the latest exact 10-hero pool allowed Warlock on Dire to lock Bloodseeker, Gyrocopter, Invoker, Tiny, and Warlock as allies, with Dazzle, Shadow Fiend, Pangolier, Sniper, and Tidehunter as enemies.
 
 `app/services/game_advisor_service.py`
 
