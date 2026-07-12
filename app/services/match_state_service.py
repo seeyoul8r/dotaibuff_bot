@@ -140,6 +140,7 @@ class MatchStateService:
         if not match_state.get('roster_locked'):
             self.hero_team_detector.apply_roster_lock(match_state, minimap_heroes, now)
         if match_state.get('roster_locked'):
+            self.apply_locked_enemy_positions(match_state, minimap_heroes, now)
             await redis_cache.set_match_state(user_id, match_id, match_state)
             logger.info(
                 f'GSI match state updated: user_id={user_id}, match_id={match_id}, '
@@ -245,6 +246,62 @@ class MatchStateService:
     def apply_hero(self, match_state: dict, hero_name: str, team_name: str | None, source: str, now: str):
         """Apply hero to accumulated match state."""
         return self.hero_team_detector.apply_hero(match_state, hero_name, team_name, source, now)
+
+    def apply_locked_enemy_positions(self, match_state: dict, minimap_heroes: list, now: str):
+        """Apply visible enemy positions after roster lock."""
+        player_team_name = match_state['player'].get('team_name')
+        opponent_team_name = {'radiant': 'dire', 'dire': 'radiant'}.get(player_team_name)
+        if opponent_team_name is None:
+            return
+
+        enemy_heroes = match_state[opponent_team_name]['heroes']
+        for enemy_hero in enemy_heroes.values():
+            # Mark every locked enemy invisible until the current snapshot confirms visibility.
+            enemy_hero['visible'] = False
+
+        for minimap_hero in minimap_heroes:
+            if minimap_hero['image'] != 'minimap_enemyicon':
+                continue
+            hero_state = enemy_heroes.get(minimap_hero['hero_name'])
+            if hero_state is None:
+                continue
+            # Store only locked enemy roster positions to avoid stale or unrelated minimap markers.
+            hero_state['visible'] = True
+            hero_state['last_seen_at'] = now
+            hero_state['last_seen_game_time'] = match_state.get('clock_time')
+            hero_state['last_seen_position'] = minimap_hero['position']
+            hero_state['last_seen_location'] = self.get_map_location(minimap_hero['position'])
+            hero_state['last_seen_image'] = minimap_hero['image']
+
+    def get_map_location(self, position: dict):
+        """Return simple map area name for minimap coordinates."""
+        xpos = position.get('xpos')
+        ypos = position.get('ypos')
+        if not isinstance(xpos, (int, float)) or not isinstance(ypos, (int, float)):
+            return 'unknown'
+
+        # GSI minimap coordinates are normalized from the bottom-left to the top-right map corner.
+        if xpos < 0.18 and ypos < 0.18:
+            return 'radiant base'
+        if xpos > 0.82 and ypos > 0.82:
+            return 'dire base'
+        if xpos > 0.55 and ypos < 0.45:
+            return 'radiant triangle'
+        if xpos < 0.45 and ypos > 0.55:
+            return 'dire triangle'
+        if 0.30 <= xpos <= 0.70 and 0.30 <= ypos <= 0.70 and abs((xpos + ypos) - 1) < 0.12:
+            return 'river'
+        if abs(xpos - ypos) < 0.08:
+            return 'mid lane'
+        if ypos > 0.68 and xpos < 0.62:
+            return 'top lane'
+        if xpos > 0.68 and ypos < 0.62:
+            return 'bot lane'
+        if xpos > 0.58 and ypos > 0.58:
+            return 'dire jungle'
+        if xpos < 0.42 and ypos < 0.42:
+            return 'radiant jungle'
+        return 'unknown'
 
     def pop_hero(self, match_state: dict, hero_name: str):
         """Remove hero from current match state buckets."""

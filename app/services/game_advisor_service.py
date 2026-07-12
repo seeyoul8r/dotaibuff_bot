@@ -103,7 +103,8 @@ class GameAdvisorService:
             'items': self.compact_match_items(match_state.get('items', {})),
             'buildings': match_state.get('buildings', {}),
             'radiant': self.compact_team(match_state.get('radiant', {})),
-            'dire': self.compact_team(match_state.get('dire', {}))
+            'dire': self.compact_team(match_state.get('dire', {})),
+            'enemy_positions': self.compact_enemy_positions(match_state)
         })
 
     def compact_player(self, player: dict):
@@ -168,6 +169,30 @@ class GameAdvisorService:
         return {
             'heroes': list(team.get('heroes', {}))
         }
+
+    def compact_enemy_positions(self, match_state: dict):
+        """Return compact locked enemy visibility state."""
+        player_team_name = match_state.get('player', {}).get('team_name')
+        opponent_team_name = {'radiant': 'dire', 'dire': 'radiant'}.get(player_team_name)
+        if opponent_team_name is None:
+            return {}
+
+        current_game_time = match_state.get('clock_time')
+        enemy_positions = {}
+        for hero_name, hero_state in match_state[opponent_team_name]['heroes'].items():
+            last_seen_game_time = hero_state.get('last_seen_game_time')
+            seen_seconds_ago = None
+            if isinstance(current_game_time, (int, float)) and isinstance(last_seen_game_time, (int, float)):
+                # Use game clock delta so advice can reason about map absence during the current match.
+                seen_seconds_ago = max(0, int(current_game_time - last_seen_game_time))
+            enemy_positions[hero_name] = self.remove_empty_state_values({
+                'visible': hero_state.get('visible', False),
+                'last_seen_location': hero_state.get('last_seen_location', 'unknown'),
+                'last_seen_game_time': last_seen_game_time,
+                'seen_seconds_ago': seen_seconds_ago,
+                'last_seen_position': hero_state.get('last_seen_position')
+            })
+        return enemy_positions
 
     def get_hero_mechanics_scope(
             self, hero_name: str, local_hero_name: str | None, allied_hero_names: set, enemy_hero_names: set):

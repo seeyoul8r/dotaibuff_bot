@@ -14,7 +14,7 @@ DotAIBuffBot is a Telegram bot plus local FastAPI service for collecting Dota 2 
 8. `MatchService` coordinates snapshot processing.
 9. When `LOG_REQUESTS=1`, sanitized snapshots are saved to JSONL files for development analysis.
 10. `MatchStateService` updates the normalized internal match state in Redis.
-   It locks the exact 5v5 roster from minimap positions when the local hero and at least 10 hero markers are visible: local hero plus the nearest 4 heroes are allies, and the next 5 heroes are enemies.
+   It locks the exact 5v5 roster from draft and live minimap markers, then keeps updating last seen enemy positions from `minimap_enemyicon`.
 11. `DotaDataService` loads OpenDota, dota2.com datafeed, and STRATZ data from the local cache file on startup, or fetches it once if no cache exists yet.
 12. The recommendation button combines normalized match state with relevant Dota mechanics context and calls Gemini.
 13. When `LOG_REQUESTS=1`, the exact model request fields are written to SQLite before the Gemini call and updated with the response or error after the call.
@@ -99,7 +99,7 @@ Current hero sources:
 - allied heroes from `minimap_herocircle`, `minimap_herocircle_self`, and `minimap_heroinvis`;
 - enemy heroes from `minimap_enemyicon`;
 - draft hero pool from unique `minimap_plaincircle` names before the roster is locked;
-- the last reliable visible position is stored for each minimap hero.
+- after the roster is locked, the last visible enemy position, map location, game time, and current visibility are stored for locked enemy heroes.
 
 `minimap_plaincircle.team` and draft-layout coordinates are not reliable. Team assignment therefore follows this sequence:
 
@@ -108,7 +108,21 @@ Current hero sources:
 3. Live allied markers from `minimap_herocircle`, `minimap_herocircle_self`, and `minimap_heroinvis` build the local team candidate.
 4. The roster is locked only when the draft pool has exactly 10 unique heroes, the live allied candidate has exactly 5 unique heroes, and the local hero is one of those 5.
 5. The 5 live allied heroes are assigned to the local player's team, and the remaining 5 draft heroes are assigned to the opposing team.
-6. After `roster_locked = true`, minimap hero roster detection stops changing team membership.
+6. After `roster_locked = true`, minimap hero roster detection stops changing team membership, but `minimap_enemyicon` keeps updating visibility and last seen data for the locked enemy roster.
+
+Enemy position fields stored inside each locked enemy hero state:
+
+```json
+{
+  "visible": true,
+  "last_seen_position": {"xpos": 0.71, "ypos": 0.34},
+  "last_seen_location": "bot lane",
+  "last_seen_game_time": 645,
+  "last_seen_image": "minimap_enemyicon"
+}
+```
+
+`last_seen_location` is a simple coordinate-based area label such as `top lane`, `mid lane`, `bot lane`, `radiant jungle`, `dire jungle`, `radiant triangle`, `dire triangle`, `river`, `radiant base`, `dire base`, or `unknown`.
 
 The `8892275624` recording demonstrated this flow for two users on Radiant. Sven and Night Stalker both locked the same allied roster: Sven, Night Stalker, Disruptor, Grimstroke, and Medusa. Bloodseeker, Nyx Assassin, Oracle, Sniper, and Spectre were assigned to Dire.
 
@@ -282,7 +296,7 @@ The main user menu contains `GSI config`, `Get AI recommendation`, and the langu
 
 `hero_win_rates` covers every hero in the match roster. `local_hero_counters` and `local_hero_builds` are scoped to the local hero only: counters are filtered to the current enemy lineup, and builds are the local hero's own STRATZ item/ability/talent data — matching how `local_items` already scopes mechanics to the local inventory.
 
-`match_state` is compacted before sending to AI. The Redis state keeps timestamps, source history, roster-lock metadata, and full hero buckets, but the prompt receives only current match time, score, local player state, local hero state, current abilities/items, buildings, and Radiant/Dire hero name lists.
+`match_state` is compacted before sending to AI. The Redis state keeps timestamps, source history, roster-lock metadata, enemy visibility, and full hero buckets. The prompt receives current match time, score, local player state, local hero state, current abilities/items, buildings, Radiant/Dire hero name lists, and `enemy_positions` with all locked enemy heroes, last seen location, coordinates, game time, and `seen_seconds_ago`.
 
 Raw OpenDota hero definitions are not sent to AI. Hero identity comes from `match_state`, while combat details come from `hero_mechanics`, win rates, counters, and builds.
 
