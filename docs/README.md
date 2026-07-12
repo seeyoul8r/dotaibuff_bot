@@ -271,7 +271,6 @@ gsi:match_state:{user_id}:{match_id}
   "dota_context": {
     "updated_at": "...",
     "patch": {},
-    "heroes": {},
     "hero_mechanics": {},
     "local_items": {},
     "hero_win_rates": {},
@@ -282,6 +281,8 @@ gsi:match_state:{user_id}:{match_id}
 ```
 
 `hero_win_rates` covers every hero in the match roster. `local_hero_counters` and `local_hero_builds` are scoped to the local hero only: counters are filtered to the current enemy lineup, and builds are the local hero's own STRATZ item/ability/talent data — matching how `local_items` already scopes mechanics to the local inventory.
+
+Raw OpenDota hero definitions are not sent to AI. Hero identity comes from `match_state`, while combat details come from `hero_mechanics`, win rates, counters, and builds.
 
 `hero_mechanics` is prompt-optimized by `GameAdvisorService.compact_hero_mechanics()` before sending to AI. The local hero keeps abilities, shard, scepter, talents, and facets. Allied and enemy heroes keep abilities, shard, and scepter so the model can reason about teamfight coordination and enemy threats without sending talent data or empty technical fields.
 

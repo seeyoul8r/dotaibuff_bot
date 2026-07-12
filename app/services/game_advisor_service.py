@@ -57,11 +57,6 @@ class GameAdvisorService:
         dota_context = {
             'updated_at': dota_data['updated_at'],
             'patch': dota_data['patch'],
-            'heroes': {
-                hero_name: dota_data['heroes'][hero_name]
-                for hero_name in hero_names
-                if hero_name in dota_data['heroes']
-            },
             'hero_mechanics': {
                 hero_name: self.compact_hero_mechanics(
                     dota_data['hero_mechanics'][hero_name],
