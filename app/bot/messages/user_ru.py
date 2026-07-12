@@ -65,6 +65,15 @@ def advice_on_cooldown(remaining_time: int):
     return f'Следующую рекомендацию можно запросить через {remaining_time} сек.'
 
 
+def next_advice_available(cooldown_period: int):
+    """Return next advice availability message."""
+    return (
+        f'\u0412\u044b \u043c\u043e\u0436\u0435\u0442\u0435 \u0441\u0434\u0435\u043b\u0430\u0442\u044c '
+        f'\u0441\u043b\u0435\u0434\u0443\u044e\u0449\u0438\u0439 \u0437\u0430\u043f\u0440\u043e\u0441 '
+        f'\u0447\u0435\u0440\u0435\u0437 {cooldown_period} \u0441\u0435\u043a.'
+    )
+
+
 def match_started(match_id: int):
     """Return match started notification."""
     return f'Матч {match_id} начался.\nID матча: {match_id}'

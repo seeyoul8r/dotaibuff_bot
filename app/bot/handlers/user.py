@@ -116,6 +116,11 @@ async def send_ai_advice(callback: CallbackQuery):
         text=f'{advice_time}\n\n{mes_user[lang].micro_advice_title}\n\n{advice.micro_gaming}',
         parse_mode=None
     )
+    # Show when the next paid request is available and keep the same cooldown-protected callback.
+    await callback.message.answer(
+        text=mes_user[lang].next_advice_available(int(game_advisor_service.config.advice_cooldown)),
+        reply_markup=kb_user[lang].afterAdviceMenu
+    )
 
 
 @user_router.callback_query(lambda callback: callback.data == CHANGE_LANGUAGE)

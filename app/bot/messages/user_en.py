@@ -65,6 +65,11 @@ def advice_on_cooldown(remaining_time: int):
     return f'You can request the next recommendation in {remaining_time} sec.'
 
 
+def next_advice_available(cooldown_period: int):
+    """Return next advice availability message."""
+    return f'You can make the next request in {cooldown_period} sec.'
+
+
 def match_started(match_id: int):
     """Return match started notification."""
     return f'Match {match_id} has started.\nMatch ID: {match_id}'

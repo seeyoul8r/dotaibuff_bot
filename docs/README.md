@@ -294,7 +294,8 @@ Raw OpenDota hero definitions are not sent to AI. Hero identity comes from `matc
 6. The service sends the JSON and `GAME_ADVISOR_PROMPT` to `gemini-3.5-flash` with the configured thinking level.
 7. The Google Gen AI SDK parses the JSON response directly into `GameAdvice`.
 8. The handler stops the ephemeral draft and sends the three schema fields as separate localized messages.
-9. If the Gemini request fails, the handler stops the draft and sends a localized error message.
+9. After a successful response, the handler sends a localized cooldown-period message with an inline `get_ai_advice` button for the next request.
+10. If the Gemini request fails, the handler stops the draft and sends a localized error message.
 
 The cooldown is configured by `AI_ADVICE_COOLDOWN` and is set before the paid API request. It is stored in `GameAdvisorService._cooldowns`, resets when the bot process restarts, and can be changed at runtime through the admin `Set advice cooldown` button.
 
