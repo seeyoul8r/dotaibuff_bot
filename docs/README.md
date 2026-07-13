@@ -6,7 +6,7 @@ DotAIBuffBot is a Telegram bot plus local FastAPI service for collecting Dota 2 
 
 1. The user sends `/start` to the Telegram bot.
 2. `non_user_router` registers a new user, shows the localized welcome menu, and notifies every admin chat once.
-3. The bot shows localized buttons for GSI config, AI recommendation, and language switching.
+3. The bot shows localized buttons for GSI config and language switching.
 4. `Получить GSI config` creates a personal GSI token and sends a `.cfg` file.
 5. The user puts the config into the Dota 2 `gamestate_integration` folder and restarts Dota 2.
 6. Dota 2 sends GSI snapshots to `POST /gsi`.
@@ -16,7 +16,7 @@ DotAIBuffBot is a Telegram bot plus local FastAPI service for collecting Dota 2 
 10. `MatchStateService` updates the normalized internal match state in Redis.
    It locks the exact 5v5 roster from draft and live minimap markers, then keeps updating last seen enemy positions from `minimap_enemyicon`.
 11. `DotaDataService` loads OpenDota, dota2.com datafeed, and STRATZ data from the local cache file on startup, or fetches it once if no cache exists yet.
-12. The recommendation button combines normalized match state with relevant Dota mechanics context and calls Gemini.
+12. The match start notification shows the recommendation button. That button combines normalized match state with relevant Dota mechanics context and calls Gemini.
 13. When `LOG_REQUESTS=1`, the exact model request fields are written to SQLite before the Gemini call and updated with the response or error after the call.
 14. The bot sends one advice message with enemy map info first, then macro gaming, build, and current micro gaming advice.
 
@@ -288,9 +288,11 @@ gsi:match_state:{user_id}:{match_id}
 
 `gsi:match_state:{user_id}:{match_id}` stores the accumulated normalized match state.
 
+After the final post-game summary, `MatchService` deletes `gsi:snapshot:{user_id}`, `gsi:active_match:{user_id}`, and `gsi:match_state:{user_id}:{match_id}`. The notification flags stay in Redis so repeated post-game snapshots do not resend start or finish messages.
+
 ## User Menu Flow
 
-The main user menu contains `GSI config`, `Get AI recommendation`, and the language toggle. `open_gsi_menu` edits only the existing message reply markup and shows `Get GSI config`, `What is GSI config?`, and `Back`. Opening this submenu must not call `ClientLinkService`, because `get_gsi_config` regenerates the long-lived client token and config file only when the user explicitly presses the download button. `back_to_main_menu` restores the main menu with `edit_reply_markup`.
+The main user menu contains `GSI config` and the language toggle. `open_gsi_menu` edits only the existing message reply markup and shows `Get GSI config`, `What is GSI config?`, and `Back`. Opening this submenu must not call `ClientLinkService`, because `get_gsi_config` regenerates the long-lived client token and config file only when the user explicitly presses the download button. `back_to_main_menu` restores the main menu with `edit_reply_markup`. The AI recommendation button is attached to the match start notification instead of the main menu.
 
 ## AI Advice Flow
 
@@ -509,7 +511,6 @@ OpenDota provides patch metadata through `constants/patch`, but not full patch n
 
 - `match_id = 0` in test games causes different test matches to share the same Redis key unless `gsi:*` is cleared.
 - Enemy items and complete player statistics are not available through the recorded GSI payloads.
-- Per-match Redis cleanup is not implemented yet.
 - AI recommendations require a valid `GEMINI_API_KEY` and current accumulated match state.
 - The recommendation cooldown is local to one bot process and is not shared through Redis.
 - Request logs are development artifacts. GSI snapshot files and `ai_requests` SQLite rows can grow until they are removed manually.

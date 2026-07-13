@@ -106,7 +106,7 @@ def enemy_seen_time(visible: bool, seen_seconds_ago: int | None):
 
 def match_started(match_id: int):
     """Return match started notification."""
-    return f'Match {match_id} has started.\nMatch ID: {match_id}'
+    return f'Match started. ID: {match_id}'
 
 
 def match_finished(match_state: dict):

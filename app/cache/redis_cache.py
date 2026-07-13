@@ -69,6 +69,15 @@ class RedisCache:
             return None
         return json.loads(state)
 
+    async def clear_match_runtime(self, user_id: int, match_id: int):
+        """Delete current match runtime data."""
+        # Remove data used by AI recommendations after the match is finished.
+        return await self._client.delete(
+            f'gsi:snapshot:{user_id}',
+            f'gsi:active_match:{user_id}',
+            f'gsi:match_state:{user_id}:{match_id}'
+        )
+
     async def clear_gsi_state(self):
         """Delete all GSI runtime keys."""
         keys = []
