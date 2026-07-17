@@ -21,6 +21,7 @@ WHAT_IS_GSI_CONFIG = 'what_is_gsi_config'
 OPEN_GSI_MENU = 'open_gsi_menu'
 BACK_TO_MAIN_MENU = 'back_to_main_menu'
 GET_AI_ADVICE = 'get_ai_advice'
+WHERE_ARE_ENEMIES = 'where_are_enemies'
 CHANGE_LANGUAGE = 'change_language'
 DRAFT_UPDATE_INTERVAL = 20
 
@@ -116,12 +117,10 @@ async def send_ai_advice(callback: CallbackQuery):
         return
 
     advice_time = mes_user[lang].advice_actual_at(match_state.get('clock_time'))
-    enemy_map_info = format_enemy_map_info(match_state, lang)
     # Send one persistent result message so Telegram keeps the whole answer visible after the draft.
     await callback.message.answer(
         text=(
             f'{advice_time}\n\n'
-            f'{enemy_map_info}'
             f'{mes_user[lang].macro_advice_title}\n\n{advice.macro_gaming}\n\n'
             f'{mes_user[lang].build_advice_title}\n\n{advice.build}\n\n'
             f'{mes_user[lang].micro_advice_title}\n\n{advice.micro_gaming}\n\n'
@@ -130,6 +129,32 @@ async def send_ai_advice(callback: CallbackQuery):
         parse_mode=None,
         reply_markup=kb_user[lang].afterAdviceMenu
     )
+
+
+@user_router.callback_query(lambda callback: callback.data == WHERE_ARE_ENEMIES)
+async def send_enemy_map_info(callback: CallbackQuery):
+    """Send current enemy map info."""
+    lang = await user_repository.get_user_lang(callback.from_user.id)
+    match_id = await redis_cache.get_active_match(callback.from_user.id)
+    match_state = None if match_id is None else await redis_cache.get_match_state(callback.from_user.id, match_id)
+    if match_state is None:
+        # Do not show enemy info until accumulated match data exists.
+        await callback.answer()
+        await callback.message.answer(text=mes_user[lang].snapshot_not_received)
+        return
+
+    match_time = mes_user[lang].advice_actual_at(match_state.get('clock_time'))
+    enemy_map_info = format_enemy_map_info(match_state, lang)
+    # Send enemy positions separately from paid AI advice.
+    await callback.message.answer(
+        text=(
+            f'{match_time}\n\n'
+            f'{enemy_map_info}'
+        ),
+        parse_mode=None,
+        reply_markup=kb_user[lang].afterAdviceMenu
+    )
+    await callback.answer()
 
 
 def format_enemy_map_info(match_state: dict, lang: str):

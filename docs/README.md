@@ -16,9 +16,9 @@ DotAIBuffBot is a Telegram bot plus local FastAPI service for collecting Dota 2 
 10. `MatchStateService` updates the normalized internal match state in Redis.
    It locks the exact 5v5 roster from draft and live minimap markers, then keeps updating last seen enemy positions from `minimap_enemyicon`.
 11. `DotaDataService` loads OpenDota, dota2.com datafeed, and STRATZ data from the local cache file on startup, or fetches it once if no cache exists yet.
-12. The match start notification shows the recommendation button. That button combines normalized match state with relevant Dota mechanics context and calls Gemini.
+12. The match start notification shows the enemy map info button and the recommendation button. The recommendation button combines normalized match state with relevant Dota mechanics context and calls Gemini.
 13. When `LOG_REQUESTS=1`, the exact model request fields are written to SQLite before the Gemini call and updated with the response or error after the call.
-14. The bot sends one advice message with enemy map info first, then macro gaming, build, and current micro gaming advice.
+14. The bot sends AI advice as one message with macro gaming, build, and current micro gaming advice. Enemy map info is sent by a separate `where_are_enemies` callback.
 
 ## Main Components
 
@@ -292,7 +292,7 @@ After the final post-game summary, `MatchService` deletes `gsi:snapshot:{user_id
 
 ## User Menu Flow
 
-The main user menu contains `GSI config` and the language toggle. `open_gsi_menu` edits only the existing message reply markup and shows `Get GSI config`, `What is GSI config?`, and `Back`. Opening this submenu must not call `ClientLinkService`, because `get_gsi_config` regenerates the long-lived client token and config file only when the user explicitly presses the download button. `back_to_main_menu` restores the main menu with `edit_reply_markup`. The AI recommendation button is attached to the match start notification instead of the main menu.
+The main user menu contains `GSI config` and the language toggle. `open_gsi_menu` edits only the existing message reply markup and shows `Get GSI config`, `What is GSI config?`, and `Back`. Opening this submenu must not call `ClientLinkService`, because `get_gsi_config` regenerates the long-lived client token and config file only when the user explicitly presses the download button. `back_to_main_menu` restores the main menu with `edit_reply_markup`. The enemy map info and AI recommendation buttons are attached to the match start notification instead of the main menu.
 
 ## AI Advice Flow
 
@@ -330,11 +330,17 @@ Raw OpenDota hero definitions are not sent to AI. Hero identity comes from `matc
 5. `GameAdvisorService.request_advice()` serializes the contents once and, when enabled, writes the exact request fields to the `ai_requests` SQLite table.
 6. The service sends the JSON and `GAME_ADVISOR_PROMPT` to `gemini-3.5-flash` with the configured thinking level.
 7. The Google Gen AI SDK parses the JSON response directly into `GameAdvice`.
-8. The handler stops the ephemeral draft, formats enemy map info from `match_state`, and sends one localized message containing that table and the three advice sections.
-9. The successful response message ends with the cooldown-period text and includes an inline `get_ai_advice` button for the next request.
+8. The handler stops the ephemeral draft and sends one localized message containing the three advice sections.
+9. The successful response message ends with the cooldown-period text and includes inline `where_are_enemies` and `get_ai_advice` buttons for follow-up requests.
 10. If the Gemini request fails, the handler stops the draft and sends a localized error message.
 
 The cooldown is configured by `AI_ADVICE_COOLDOWN` and is set before the paid API request. It is stored in `GameAdvisorService._cooldowns`, resets when the bot process restarts, and can be changed at runtime through the admin `Set advice cooldown` button.
+
+## Enemy Map Info Flow
+
+1. The `where_are_enemies` callback verifies that accumulated match state exists.
+2. The handler formats the current match time and enemy map info from `match_state`.
+3. The bot sends a separate localized message with match time, enemy locations, and the same follow-up keyboard as the AI advice message.
 
 ## SQLite Tables
 

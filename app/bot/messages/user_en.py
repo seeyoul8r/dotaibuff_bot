@@ -1,12 +1,12 @@
 start_text = 'DotAIBuffBot started.'
 welcome = '''Welcome to DotAIBuffBot!
 
-The service receives the current Dota 2 match state through GSI. On request, AI analyzes the accumulated data and sends enemy map info plus three recommendations: macro gaming, a build, and the current micro gaming priority.
+The service receives the current Dota 2 match state through GSI. On request, the bot shows enemy map info, and AI analyzes the accumulated data to send three recommendations: macro gaming, a build, and the current micro gaming priority.
 
 Get and install your personal GSI config from the menu below to begin.'''
 unregistered = '''To use DotAIBuffBot, register first with the /start command.
 
-The service receives current match data through GSI and provides enemy map info plus AI recommendations for macro gaming, builds, and micro gaming.'''
+The service receives current match data through GSI and provides enemy map info separately from AI recommendations for macro gaming, builds, and micro gaming.'''
 gsi_config_caption = 'Put the file into the Dota 2 gamestate_integration folder.'
 gsi_config_info = '''A GSI config connects Dota 2 to the local DotAIBuffBot service. The game sends match data through it, and the bot prepares recommendations.
 

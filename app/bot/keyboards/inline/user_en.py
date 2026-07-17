@@ -7,6 +7,7 @@ openGsiMenuBtn = InlineKeyboardButton(text='GSI config', callback_data='open_gsi
 backToMainMenuBtn = InlineKeyboardButton(text='Back', callback_data='back_to_main_menu')
 getAiAdviceBtn = InlineKeyboardButton(text='📦 Get AI advice', callback_data='get_ai_advice')
 newAiAdviceBtn = InlineKeyboardButton(text='📦 Get AI advice', callback_data='get_ai_advice')
+whereAreEnemiesBtn = InlineKeyboardButton(text='♿️ Where are enemies?', callback_data='where_are_enemies')
 changeLanguageBtn = InlineKeyboardButton(text='Lang: RU', callback_data='change_language')
 
 mainMenu = InlineKeyboardMarkup(inline_keyboard=[
@@ -21,9 +22,11 @@ gsiMenu = InlineKeyboardMarkup(inline_keyboard=[
 ])
 
 afterAdviceMenu = InlineKeyboardMarkup(inline_keyboard=[
+    [whereAreEnemiesBtn],
     [newAiAdviceBtn]
 ])
 
 matchStartedMenu = InlineKeyboardMarkup(inline_keyboard=[
+    [whereAreEnemiesBtn],
     [getAiAdviceBtn]
 ])
