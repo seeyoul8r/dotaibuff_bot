@@ -2,6 +2,25 @@
 
 DotAIBuffBot is a Telegram bot plus local FastAPI service for collecting Dota 2 Game State Integration snapshots, building an internal match state, and generating compact AI recommendations during a match.
 
+## Project Structure
+
+- `app/` - application source code.
+  - `ai/` - Gemini system prompts and AI-facing text instructions.
+  - `api/` - FastAPI endpoints, including the Dota 2 GSI receiver.
+  - `bot/` - Telegram bot layer: handlers, filters, inline keyboards, and localized user/admin messages.
+  - `cache/` - Redis access wrapper for runtime match state.
+  - `core/` - environment config loading.
+  - `models/` - SQLite table models.
+  - `repositories/` - SQLite persistence layer for users, client links, and AI request logs.
+  - `schemas/` - dataclasses and Pydantic schemas shared between services.
+  - `services/` - business logic: match processing, match state accumulation, Dota data loading, AI advice, GSI logging, and map location detection.
+- `data/` - local runtime data such as Dota cache files, SQLite DB files, and GSI snapshot logs. Runtime/generated files are gitignored where needed.
+- `docs/` - user manuals, internal architecture notes, and the editable Dota map location coverage HTML.
+- `run_local.py` - local process entrypoint that starts the bots, GSI API, Dota data API, and startup data loader.
+- `Dockerfile` - container image definition for the bundled runtime.
+- `docker-compose.yml` - local/server stack definition for the app and Redis.
+- `requirements.txt` - Python dependency list.
+
 ## Runtime Flow
 
 1. The user sends `/start` to the Telegram bot.
