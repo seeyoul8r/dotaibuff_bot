@@ -1,0 +1,382 @@
+<div id="map-location-coverage" style="width:100%; max-width:100%; color:var(--foreground);">
+  <style>
+    #map-location-coverage .mlc-wrap { display: grid; gap: 10px; }
+    #map-location-coverage .mlc-controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; }
+    #map-location-coverage .mlc-field { display: grid; gap: 3px; }
+    #map-location-coverage .mlc-field input, #map-location-coverage .mlc-field select { max-width: 145px; }
+    #map-location-coverage .mlc-output { width: 100%; min-height: 180px; font-family: monospace; font-size: 12px; }
+    #map-location-coverage .mlc-legend { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    #map-location-coverage .mlc-key { display: inline-flex; gap: 6px; align-items: center; }
+    #map-location-coverage .mlc-swatch { width: 12px; height: 12px; border-radius: 999px; border: 1px solid var(--border); }
+    #map-location-coverage .mlc-radiant { background: color-mix(in srgb, var(--viz-series-2) 55%, transparent); }
+    #map-location-coverage .mlc-dire { background: color-mix(in srgb, var(--viz-series-5) 55%, transparent); }
+    #map-location-coverage .mlc-neutral { background: color-mix(in srgb, var(--viz-series-1) 55%, transparent); }
+    #map-location-coverage svg { width: 100%; height: auto; display: block; background: var(--background); }
+    #map-location-coverage .mlc-map { opacity: .88; }
+    #map-location-coverage .mlc-zone { stroke-width: 2.5; opacity: .3; cursor: pointer; }
+    #map-location-coverage .mlc-zone-selected { stroke: var(--primary); stroke-width: 4.4; opacity: .52; }
+    #map-location-coverage .mlc-center { opacity: .92; cursor: move; }
+    #map-location-coverage .mlc-handle { fill: var(--primary); stroke: var(--primary-foreground); stroke-width: 1.5; cursor: ew-resize; }
+    #map-location-coverage .mlc-handle-y { cursor: ns-resize; }
+    #map-location-coverage .mlc-handle-rotate { cursor: grab; }
+    #map-location-coverage .mlc-rotation-line { stroke: var(--primary); stroke-width: 1.5; stroke-dasharray: 8 6; opacity: .75; }
+    #map-location-coverage .mlc-label { fill: var(--foreground); font-size: 8px; font-weight: 500; paint-order: stroke; stroke: var(--background); stroke-width: 2.3px; }
+    #map-location-coverage .mlc-note { color: var(--muted-foreground); }
+  </style>
+  <div class="mlc-wrap">
+    <div class="mlc-controls text-small">
+      <label class="mlc-field">Zone <select id="mlc-zone-select"></select></label>
+      <label class="mlc-field">Slug <input id="mlc-slug" type="text"></label>
+      <label class="mlc-field">X <input id="mlc-x" type="number" step="1"></label>
+      <label class="mlc-field">Y <input id="mlc-y" type="number" step="1"></label>
+      <label class="mlc-field">Radius X <input id="mlc-r" type="number" min="1" step="1"></label>
+      <label class="mlc-field">Radius Y <input id="mlc-ry" type="number" min="1" step="1"></label>
+      <label class="mlc-field">Rotation <input id="mlc-rot" type="number" step="1"></label>
+      <button id="mlc-add" type="button">Add zone</button>
+      <button id="mlc-delete" type="button">Delete selected</button>
+      <label class="mlc-field">Map opacity <input id="mlc-map-opacity" type="range" min="0" max="100" value="88"></label>
+      <label class="mlc-field">Zone opacity <input id="mlc-zone-opacity" type="range" min="5" max="70" value="30"></label>
+      <label><input id="mlc-show-labels" type="checkbox" checked> Labels</label>
+    </div>
+    <textarea id="mlc-output" class="mlc-output" readonly aria-label="Current map zone export"></textarea>
+    <div class="mlc-legend text-small" aria-label="Map location zone legend">
+      <span class="mlc-key"><span class="mlc-swatch mlc-radiant"></span>Radiant zones</span>
+      <span class="mlc-key"><span class="mlc-swatch mlc-dire"></span>Dire zones</span>
+      <span class="mlc-key"><span class="mlc-swatch mlc-neutral"></span>River / Roshan</span>
+      <span class="mlc-note">Drag center to move. Drag X/Y handles to resize. Drag diagonal handle to make a circle. Drag outer handle to rotate.</span>
+    </div>
+    <svg viewBox="0 0 1024 1024" role="img" aria-label="Editable Dota map location zones">
+      <title>Editable Dota map location zones</title>
+      <desc>Official Dota overview map with editable oval map location zones.</desc>
+      <image class="mlc-map" href="dota_tga_d8178876.png" x="0" y="0" width="1024" height="1024" preserveAspectRatio="none"/>
+      <g id="mlc-zones"></g>
+      <g id="mlc-labels"></g>
+      <g id="mlc-handles"></g>
+    </svg>
+  </div>
+  <script>
+    (() => {
+      const root = document.getElementById('map-location-coverage');
+      const svg = root.querySelector('svg');
+      const zoneGroup = root.querySelector('#mlc-zones');
+      const labelGroup = root.querySelector('#mlc-labels');
+      const handleGroup = root.querySelector('#mlc-handles');
+      const map = root.querySelector('.mlc-map');
+      const output = root.querySelector('#mlc-output');
+      const zoneSelect = root.querySelector('#mlc-zone-select');
+      const slugInput = root.querySelector('#mlc-slug');
+      const xInput = root.querySelector('#mlc-x');
+      const yInput = root.querySelector('#mlc-y');
+      const rInput = root.querySelector('#mlc-r');
+      const ryInput = root.querySelector('#mlc-ry');
+      const rotInput = root.querySelector('#mlc-rot');
+      const addButton = root.querySelector('#mlc-add');
+      const deleteButton = root.querySelector('#mlc-delete');
+      const mapOpacity = root.querySelector('#mlc-map-opacity');
+      const zoneOpacity = root.querySelector('#mlc-zone-opacity');
+      const showLabels = root.querySelector('#mlc-show-labels');
+      const overview = { posX: -9472, posY: 9472, scale: 18.5 };
+      const zones = [{"slug":"radiant_highground","x":-6543,"y":-6258,"r":3547,"ry":3547,"rot":0},{"slug":"radiant_lotus_pool","x":7554,"y":-4371,"r":1261,"ry":1261,"rot":0},{"slug":"radiant_tormentor","x":7802,"y":-6206,"r":1076,"ry":1076,"rot":0},{"slug":"radiant_twin_gate","x":6498,"y":-7411,"r":1055,"ry":1055,"rot":0},{"slug":"bot_roshan_pit","x":3060,"y":-2790,"r":1049,"ry":1049,"rot":0},{"slug":"dire_secret_shop","x":4723,"y":-1667,"r":863,"ry":863,"rot":0},{"slug":"top_roshan_pit","x":-3015,"y":2393,"r":1007,"ry":1007,"rot":0},{"slug":"radiant_secret_shop","x":-5225,"y":1547,"r":1054,"ry":1054,"rot":0},{"slug":"radiant_wisdom_rune","x":-7929,"y":1854,"r":779,"ry":1386,"rot":0},{"slug":"radiant_statue","x":-7936,"y":-1285,"r":784,"ry":1720,"rot":0},{"slug":"dire_lotus_pool","x":-7614,"y":4596,"r":1187,"ry":1187,"rot":0},{"slug":"dire_tormentor","x":-7592,"y":6521,"r":1000,"ry":1000,"rot":0},{"slug":"dire_twin_gate","x":-6416,"y":7839,"r":853,"ry":853,"rot":0},{"slug":"dire_safelane","x":-1734,"y":6169,"r":4944,"ry":861,"rot":0},{"slug":"dire_offlane","x":6281,"y":-1891,"r":861,"ry":4285,"rot":0},{"slug":"dire_wisdom_rune","x":8071,"y":-1831,"r":879,"ry":1588,"rot":0},{"slug":"dire_triangle","x":3547,"y":-4,"r":1865,"ry":1865,"rot":0},{"slug":"dire_highground","x":6288,"y":5974,"r":3793,"ry":3793,"rot":0},{"slug":"dire_mines","x":-1202,"y":7697,"r":4240,"ry":772,"rot":0},{"slug":"radiant_hardlane","x":-6483,"y":1292,"r":809,"ry":4524,"rot":0},{"slug":"radiant_midlane","x":-2273,"y":-2071,"r":2622,"ry":731,"rot":45},{"slug":"dire_midlane","x":1682,"y":1487,"r":2866,"ry":683,"rot":45},{"slug":"dire_graveyard","x":8056,"y":903,"r":900,"ry":1408,"rot":0},{"slug":"radiant_triangle","x":-4019,"y":-566,"r":2107,"ry":1383,"rot":55},{"slug":"radiant_safelane","x":1390,"y":-6453,"r":4899,"ry":861,"rot":0},{"slug":"radiant_well","x":1427,"y":-8124,"r":4644,"ry":951,"rot":0},{"slug":"radiant_jungle_big","x":-423,"y":-3996,"r":2719,"ry":2270,"rot":0},{"slug":"radiant_jungle_small","x":3966,"y":-4566,"r":1715,"ry":1296,"rot":0},{"slug":"dire_jungle_big","x":41,"y":3846,"r":2974,"ry":1858,"rot":0},{"slug":"dire_jungle_small","x":-4573,"y":4348,"r":1393,"ry":1393,"rot":0}];
+      zones.forEach((zone) => {
+        zone.ry = zone.ry || zone.r;
+        zone.rot = zone.rot || 0;
+      });
+      let selectedIndex = 26;
+      let dragMode = null;
+      const colorFor = (slug) => slug.includes('river') || slug.includes('roshan') ? 'var(--viz-series-1)' : slug.startsWith('radiant') ? 'var(--viz-series-2)' : 'var(--viz-series-5)';
+      const project = (x, y) => ({
+        x: (x - overview.posX) / overview.scale,
+        y: (overview.posY - y) / overview.scale
+      });
+      const unproject = (x, y) => ({
+        x: x * overview.scale + overview.posX,
+        y: overview.posY - y * overview.scale
+      });
+      const svgPoint = (event) => {
+        const point = svg.createSVGPoint();
+        point.x = event.clientX;
+        point.y = event.clientY;
+        return point.matrixTransform(svg.getScreenCTM().inverse());
+      };
+      const ellipseWorldPoint = (zone, angle) => {
+        const rotation = zone.rot * Math.PI / 180;
+        const localX = Math.cos(angle) * zone.r;
+        const localY = Math.sin(angle) * zone.ry;
+        return {
+          x: zone.x + localX * Math.cos(rotation) - localY * Math.sin(rotation),
+          y: zone.y + localX * Math.sin(rotation) + localY * Math.cos(rotation)
+        };
+      };
+      const zonePath = (zone) => {
+        const steps = 72;
+        const points = [];
+        for (let index = 0; index <= steps; index += 1) {
+          const angle = Math.PI * 2 * index / steps;
+          const worldPoint = ellipseWorldPoint(zone, angle);
+          points.push(project(worldPoint.x, worldPoint.y));
+        }
+        return points.map((point, index) => `${index === 0 ? 'M' : 'L'}${point.x.toFixed(2)} ${point.y.toFixed(2)}`).join(' ') + ' Z';
+      };
+      const radiusHandle = (zone, angle) => {
+        const worldPoint = ellipseWorldPoint(zone, angle);
+        return project(worldPoint.x, worldPoint.y);
+      };
+      const rotationHandle = (zone) => {
+        const rotation = zone.rot * Math.PI / 180;
+        const worldPoint = {
+          x: zone.x + (zone.r + 650) * Math.cos(rotation),
+          y: zone.y + (zone.r + 650) * Math.sin(rotation)
+        };
+        return project(worldPoint.x, worldPoint.y);
+      };
+      const syncSelect = () => {
+        zoneSelect.replaceChildren();
+        zones.forEach((zone, index) => {
+          const option = document.createElement('option');
+          option.value = String(index);
+          option.textContent = `${index + 1}. ${zone.slug}`;
+          zoneSelect.appendChild(option);
+        });
+        zoneSelect.value = String(selectedIndex);
+      };
+      const syncInputs = () => {
+        const zone = zones[selectedIndex];
+        slugInput.value = zone.slug;
+        xInput.value = Math.round(zone.x);
+        yInput.value = Math.round(zone.y);
+        rInput.value = Math.round(zone.r);
+        ryInput.value = Math.round(zone.ry);
+        rotInput.value = Math.round(zone.rot);
+      };
+      const updateSelectedFromInputs = () => {
+        const zone = zones[selectedIndex];
+        zone.slug = slugInput.value;
+        zone.x = Number(xInput.value);
+        zone.y = Number(yInput.value);
+        zone.r = Number(rInput.value);
+        zone.ry = Number(ryInput.value);
+        zone.rot = Number(rotInput.value);
+        render();
+      };
+      const pythonLine = (zone) => {
+        if (zone.ry === zone.r && zone.rot === 0) {
+          return `MapLocationPoint('${zone.slug}', ${Math.round(zone.x)}, ${Math.round(zone.y)}, ${Math.round(zone.r)}),`;
+        }
+        return `MapLocationPoint('${zone.slug}', ${Math.round(zone.x)}, ${Math.round(zone.y)}, ${Math.round(zone.r)}, ${Math.round(zone.ry)}, ${Math.round(zone.rot)}),`;
+      };
+      const render = () => {
+        syncSelect();
+        syncInputs();
+        zoneGroup.replaceChildren();
+        labelGroup.replaceChildren();
+        handleGroup.replaceChildren();
+        const labelGroups = new Map();
+        zones.forEach((zone, index) => {
+          const projected = project(zone.x, zone.y);
+          const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+          path.setAttribute('class', index === selectedIndex ? 'mlc-zone mlc-zone-selected' : 'mlc-zone');
+          path.setAttribute('d', zonePath(zone));
+          path.setAttribute('fill', colorFor(zone.slug));
+          path.setAttribute('stroke', index === selectedIndex ? 'var(--primary)' : colorFor(zone.slug));
+          path.dataset.index = String(index);
+          const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+          title.textContent = `${zone.slug} (${Math.round(zone.x)}, ${Math.round(zone.y)}), radius ${Math.round(zone.r)} / ${Math.round(zone.ry)}, rotation ${Math.round(zone.rot)}`;
+          path.appendChild(title);
+          zoneGroup.appendChild(path);
+          const center = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+          center.setAttribute('class', 'mlc-center');
+          center.setAttribute('cx', projected.x);
+          center.setAttribute('cy', projected.y);
+          center.setAttribute('r', index === selectedIndex ? 2 : 1.2);
+          center.setAttribute('fill', colorFor(zone.slug));
+          center.dataset.index = String(index);
+          center.dataset.handle = 'center';
+          handleGroup.appendChild(center);
+          const group = labelGroups.get(zone.slug) || { x: 0, y: 0, count: 0 };
+          group.x += projected.x;
+          group.y += projected.y;
+          group.count += 1;
+          labelGroups.set(zone.slug, group);
+        });
+        [...labelGroups.entries()].forEach(([slug, group]) => {
+          if (!showLabels.checked) {
+            return;
+          }
+          const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+          text.setAttribute('class', 'mlc-label');
+          text.setAttribute('x', group.x / group.count + 1.8);
+          text.setAttribute('y', group.y / group.count - 1.8);
+          text.textContent = slug.replaceAll('_', ' ');
+          labelGroup.appendChild(text);
+        });
+        const selected = zones[selectedIndex];
+        const selectedCenter = project(selected.x, selected.y);
+        const selectedRotationHandle = rotationHandle(selected);
+        const rotationLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        rotationLine.setAttribute('class', 'mlc-rotation-line');
+        rotationLine.setAttribute('x1', selectedCenter.x);
+        rotationLine.setAttribute('y1', selectedCenter.y);
+        rotationLine.setAttribute('x2', selectedRotationHandle.x);
+        rotationLine.setAttribute('y2', selectedRotationHandle.y);
+        handleGroup.appendChild(rotationLine);
+        [
+          ['radius_x', 0, 'mlc-handle'],
+          ['radius_y', Math.PI / 2, 'mlc-handle mlc-handle-y'],
+          ['radius_circle', Math.PI / 4, 'mlc-handle']
+        ].forEach(([handle, angle, className]) => {
+          const point = radiusHandle(selected, angle);
+          const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+          circle.setAttribute('class', className);
+          circle.setAttribute('cx', point.x);
+          circle.setAttribute('cy', point.y);
+          circle.setAttribute('r', 2.5);
+          circle.dataset.index = String(selectedIndex);
+          circle.dataset.handle = handle;
+          handleGroup.appendChild(circle);
+        });
+        const rotateCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        rotateCircle.setAttribute('class', 'mlc-handle mlc-handle-rotate');
+        rotateCircle.setAttribute('cx', selectedRotationHandle.x);
+        rotateCircle.setAttribute('cy', selectedRotationHandle.y);
+        rotateCircle.setAttribute('r', 4);
+        rotateCircle.dataset.index = String(selectedIndex);
+        rotateCircle.dataset.handle = 'rotation';
+        handleGroup.appendChild(rotateCircle);
+        output.value = [
+          'selected:',
+          JSON.stringify({
+            slug: selected.slug,
+            x: Math.round(selected.x),
+            y: Math.round(selected.y),
+            radius: Math.round(selected.r),
+            radius_y: Math.round(selected.ry),
+            rotation: Math.round(selected.rot)
+          }),
+          '',
+          'python:',
+          zones.map(pythonLine).join(String.fromCharCode(10)),
+          '',
+          'json:',
+          JSON.stringify(zones.map((zone) => ({
+            slug: zone.slug,
+            x: Math.round(zone.x),
+            y: Math.round(zone.y),
+            radius: Math.round(zone.r),
+            radius_y: Math.round(zone.ry),
+            rotation: Math.round(zone.rot)
+          })))
+        ].join(String.fromCharCode(10));
+        syncOpacity();
+      };
+      const syncOpacity = () => {
+        map.style.opacity = String(Number(mapOpacity.value) / 100);
+        root.querySelectorAll('.mlc-zone:not(.mlc-zone-selected)').forEach((zone) => {
+          zone.style.opacity = String(Number(zoneOpacity.value) / 100);
+        });
+      };
+      const addZone = () => {
+        const worldCenter = unproject(512, 512);
+        // New zones start from the map center and can be moved immediately.
+        zones.push({ slug: 'new_zone', x: Math.round(worldCenter.x), y: Math.round(worldCenter.y), r: 900, ry: 900, rot: 0 });
+        selectedIndex = zones.length - 1;
+        render();
+      };
+      const deleteSelectedZone = () => {
+        if (zones.length <= 1) {
+          return;
+        }
+        // Delete only the selected editable zone and keep another zone selected.
+        zones.splice(selectedIndex, 1);
+        selectedIndex = Math.max(0, selectedIndex - 1);
+        render();
+      };
+      const isInputTarget = (target) => ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName);
+      zoneGroup.addEventListener('pointerdown', (event) => {
+        if (event.target.dataset.index === undefined) {
+          return;
+        }
+        selectedIndex = Number(event.target.dataset.index);
+        render();
+      });
+      handleGroup.addEventListener('pointerdown', (event) => {
+        if (event.target.dataset.handle === undefined) {
+          return;
+        }
+        selectedIndex = Number(event.target.dataset.index);
+        dragMode = event.target.dataset.handle;
+        render();
+      });
+      svg.addEventListener('pointermove', (event) => {
+        if (dragMode === null) {
+          return;
+        }
+        const svgPosition = svgPoint(event);
+        const worldPosition = unproject(svgPosition.x, svgPosition.y);
+        const zone = zones[selectedIndex];
+        if (dragMode === 'center') {
+          zone.x = worldPosition.x;
+          zone.y = worldPosition.y;
+        }
+        if (dragMode === 'radius_x' || dragMode === 'radius_y' || dragMode === 'radius_circle') {
+          const rotation = zone.rot * Math.PI / 180;
+          const deltaX = worldPosition.x - zone.x;
+          const deltaY = worldPosition.y - zone.y;
+          const localX = deltaX * Math.cos(rotation) + deltaY * Math.sin(rotation);
+          const localY = -deltaX * Math.sin(rotation) + deltaY * Math.cos(rotation);
+          if (dragMode === 'radius_x') {
+            zone.r = Math.max(1, Math.abs(localX));
+          }
+          if (dragMode === 'radius_y') {
+            zone.ry = Math.max(1, Math.abs(localY));
+          }
+          if (dragMode === 'radius_circle') {
+            // Diagonal handle turns the selected zone into an even circle.
+            const radius = Math.max(1, Math.sqrt(localX ** 2 + localY ** 2));
+            zone.r = radius;
+            zone.ry = radius;
+          }
+        }
+        if (dragMode === 'rotation') {
+          // Rotation handle follows the pointer angle around the selected zone center.
+          zone.rot = Math.atan2(worldPosition.y - zone.y, worldPosition.x - zone.x) * 180 / Math.PI;
+        }
+        render();
+      });
+      svg.addEventListener('pointerup', () => {
+        dragMode = null;
+      });
+      svg.addEventListener('pointerleave', () => {
+        dragMode = null;
+      });
+      svg.addEventListener('pointercancel', () => {
+        dragMode = null;
+      });
+      [slugInput, xInput, yInput, rInput, ryInput, rotInput].forEach((input) => {
+        input.addEventListener('input', updateSelectedFromInputs);
+      });
+      zoneSelect.addEventListener('change', () => {
+        selectedIndex = Number(zoneSelect.value);
+        render();
+      });
+      addButton.addEventListener('click', addZone);
+      deleteButton.addEventListener('click', deleteSelectedZone);
+      document.addEventListener('keydown', (event) => {
+        if (isInputTarget(event.target)) {
+          return;
+        }
+        if (event.key === 'Insert') {
+          event.preventDefault();
+          addZone();
+        }
+        if (event.key === 'Delete') {
+          event.preventDefault();
+          deleteSelectedZone();
+        }
+      });
+      mapOpacity.addEventListener('input', syncOpacity);
+      zoneOpacity.addEventListener('input', syncOpacity);
+      showLabels.addEventListener('change', render);
+      render();
+    })();
+  </script>
+</div>

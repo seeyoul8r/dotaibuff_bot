@@ -8,3 +8,5 @@ class MapLocationPoint:
     xpos: int
     ypos: int
     radius: int
+    radius_y: int | None = None
+    rotation: int = 0

@@ -42,17 +42,36 @@ dire_label = 'Dire'
 language_changed = 'Language changed.'
 enemy_map_info_title = 'Enemy map info'
 enemy_map_info_header = 'Hero | Last seen | Time'
+enemy_not_seen_yet = 'Not seen yet'
+enemy_unknown_area = 'Unknown area'
+enemy_no_seen_time = '-'
 map_location_names = {
     'unknown': 'unknown',
     'radiant_fountain': 'Radiant fountain',
     'radiant_throne': 'Radiant throne',
-    'radiant_t4': 'Radiant T4',
+    'radiant_safelane_t3': 'Radiant safelane T3',
+    'radiant_safelane_t2': 'Radiant safelane T2',
+    'radiant_safelane_t1': 'Radiant safelane T1',
+    'radiant_safelane_jungle': 'Radiant safelane jungle',
+    'radiant_safelane_forest': 'Radiant safelane forest',
+    'radiant_lotus_pool': 'Radiant lotus pool',
+    'radiant_tormentor': 'Radiant tormentor',
+    'radiant_twin_gate': 'Radiant twin gate',
     'radiant_mid_t3': 'Radiant mid T3',
     'radiant_mid_t2': 'Radiant mid T2',
     'radiant_mid_t1': 'Radiant mid T1',
+    'bot_river': 'bot river',
+    'bot_roshan_pit': 'bot Roshan pit',
+    'dire_secret_shop': 'Dire secret shop',
     'mid_river': 'mid river',
     'dire_mid_t1': 'Dire mid T1',
+    'top_river': 'top river',
+    'top_roshan_pit': 'top Roshan pit',
+    'radiant_secret_shop': 'Radiant secret shop',
     'dire_mid_t2': 'Dire mid T2',
+    'dire_mid_t3': 'Dire mid T3',
+    'dire_throne': 'Dire throne',
+    'dire_fountain': 'Dire fountain',
     'radiant_triangle': 'Radiant triangle',
     'radiant_offlane_t2': 'Radiant offlane T2',
     'radiant_offlane_t1': 'Radiant offlane T1',
@@ -65,7 +84,13 @@ map_location_names = {
     'dire_safelane_jungle': 'Dire safelane jungle',
     'dire_safelane_t3': 'Dire safelane T3',
     'dire_safelane_t2': 'Dire safelane T2',
-    'dire_safelane_forest': 'Dire safelane forest'
+    'dire_safelane_forest': 'Dire safelane forest',
+    'dire_offlane_t1': 'Dire offlane T1',
+    'dire_offlane_t2': 'Dire offlane T2',
+    'dire_wisdom_rune': 'Dire wisdom rune',
+    'dire_offlane_jungle': 'Dire offlane jungle',
+    'dire_offlane_bridge': 'Dire offlane bridge',
+    'dire_triangle': 'Dire triangle'
 }
 macro_advice_title = 'Macro gaming'
 build_advice_title = 'Build'

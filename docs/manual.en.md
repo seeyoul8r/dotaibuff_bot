@@ -38,7 +38,8 @@
 - Each user can request advice no more than once every 3 minutes.
 - If current match GSI data has not been received yet, the bot reports it without starting an AI request.
 - Press `♿️ Where are enemies?` to get a separate message with match time and the `Enemy map info` block.
-- The enemy block shows human-readable map areas, such as triangle, lane, base, or river.
+- The enemy block shows English map area names, such as `Radiant Triangle`, `Dire Safe Lane`, or `Bot Roshan Pit`.
+- If an enemy has not been seen on the minimap yet, the bot shows `Not seen yet`; if coordinates are too far from the nearest configured zone, the bot shows `Unknown area`.
 - When the match ends, the bot sends a final summary with winner, score, hero, level, KDA, and match time. After that, advice for the finished match cannot be requested.
 
 ## Language

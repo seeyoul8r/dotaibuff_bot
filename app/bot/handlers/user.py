@@ -12,6 +12,7 @@ from app.repositories.user_repository import user_repository
 from app.services.client_link_service import client_link_service
 from app.services.dota_data_service import dota_data_service
 from app.services.game_advisor_service import game_advisor_service
+from app.services.map_location_service import UNKNOWN_LOCATION_SLUG
 
 
 logger = logging.getLogger(__name__)
@@ -24,6 +25,45 @@ GET_AI_ADVICE = 'get_ai_advice'
 WHERE_ARE_ENEMIES = 'where_are_enemies'
 CHANGE_LANGUAGE = 'change_language'
 DRAFT_UPDATE_INTERVAL = 20
+MAP_LOCATION_WORDS = {
+    'big': 'Big',
+    'bot': 'Bot',
+    'bridge': 'Bridge',
+    'dire': 'Dire',
+    'forest': 'Forest',
+    'fountain': 'Fountain',
+    'graveyard': 'Graveyard',
+    'hardlane': 'Hard Lane',
+    'highground': 'High Ground',
+    'jungle': 'Jungle',
+    'lotus': 'Lotus',
+    'mid': 'Mid',
+    'midlane': 'Mid Lane',
+    'mines': 'Mines',
+    'offlane': 'Offlane',
+    'pit': 'Pit',
+    'pool': 'Pool',
+    'radiant': 'Radiant',
+    'river': 'River',
+    'roshan': 'Roshan',
+    'safelane': 'Safe Lane',
+    'secret': 'Secret',
+    'shop': 'Shop',
+    'small': 'Small',
+    'statue': 'Statue',
+    'tormentor': 'Tormentor',
+    'top': 'Top',
+    'triangle': 'Triangle',
+    'throne': 'Throne',
+    'twin': 'Twin',
+    'gate': 'Gate',
+    't1': 'T1',
+    't2': 'T2',
+    't3': 'T3',
+    'well': 'Well',
+    'wisdom': 'Wisdom',
+    'rune': 'Rune'
+}
 
 
 async def keep_advice_draft(bot: Bot, chat_id: int, draft_id: int):
@@ -169,18 +209,19 @@ def format_enemy_map_info(match_state: dict, lang: str):
     lines = []
     for hero_name, hero_state in match_state[opponent_team_name]['heroes'].items():
         last_seen_game_time = hero_state.get('last_seen_game_time')
-        if last_seen_game_time is None:
-            continue
         seen_seconds_ago = None
         if isinstance(current_game_time, (int, float)) and isinstance(last_seen_game_time, (int, float)):
             # Use game clock delta to keep table timing aligned with match time.
             seen_seconds_ago = max(0, int(current_game_time - last_seen_game_time))
         if seen_seconds_ago is None and not hero_state.get('visible', False):
-            continue
-        seen_time = mes_user[lang].enemy_seen_time(hero_state.get('visible', False), seen_seconds_ago)
+            seen_time = mes_user[lang].enemy_no_seen_time
+            location_title = mes_user[lang].enemy_not_seen_yet
+        else:
+            seen_time = mes_user[lang].enemy_seen_time(hero_state.get('visible', False), seen_seconds_ago)
+            location_slug = hero_state.get('last_seen_location_slug', UNKNOWN_LOCATION_SLUG)
+            # Keep detected area names English and generated from the stored slug.
+            location_title = mes_user[lang].enemy_unknown_area if location_slug == UNKNOWN_LOCATION_SLUG else format_map_location_title(location_slug)
         hero_title = dota_data['heroes'][hero_name]['definition']['localized_name']
-        location_slug = hero_state.get('last_seen_location_slug', 'unknown')
-        location_title = mes_user[lang].map_location_names[location_slug]
         lines.append(f'{hero_title} | {location_title} | {seen_time}')
 
     if not lines:
@@ -188,6 +229,12 @@ def format_enemy_map_info(match_state: dict, lang: str):
 
     # Plain text table is used because outgoing advice disables Telegram parse mode.
     return f'{mes_user[lang].enemy_map_info_title}\n\n{mes_user[lang].enemy_map_info_header}\n' + '\n'.join(lines) + '\n\n'
+
+
+def format_map_location_title(location_slug: str):
+    """Return English readable map location title."""
+    # Map internal slug tokens to readable English words used in both languages.
+    return ' '.join(MAP_LOCATION_WORDS[word] for word in location_slug.split('_'))
 
 
 @user_router.callback_query(lambda callback: callback.data == CHANGE_LANGUAGE)

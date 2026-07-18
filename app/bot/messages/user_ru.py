@@ -42,17 +42,36 @@ dire_label = 'Dire'
 language_changed = 'Язык изменен.'
 enemy_map_info_title = 'Враги на карте'
 enemy_map_info_header = 'Герой | Где видели | Когда'
+enemy_not_seen_yet = 'Not seen yet'
+enemy_unknown_area = 'Unknown area'
+enemy_no_seen_time = '-'
 map_location_names = {
     'unknown': 'неизвестно',
     'radiant_fountain': 'фонтан Radiant',
     'radiant_throne': 'трон Radiant',
-    'radiant_t4': 'T4 Radiant',
+    'radiant_safelane_t3': 'T3 Radiant на легкой',
+    'radiant_safelane_t2': 'T2 Radiant на легкой',
+    'radiant_safelane_t1': 'T1 Radiant на легкой',
+    'radiant_safelane_jungle': 'лес Radiant у легкой',
+    'radiant_safelane_forest': 'лес Radiant у легкой',
+    'radiant_lotus_pool': 'лотос Radiant',
+    'radiant_tormentor': 'терзатель Radiant',
+    'radiant_twin_gate': 'портал Radiant',
     'radiant_mid_t3': 'T3 Radiant на миде',
     'radiant_mid_t2': 'T2 Radiant на миде',
     'radiant_mid_t1': 'T1 Radiant на миде',
+    'bot_river': 'нижняя река',
+    'bot_roshan_pit': 'нижний Рошан-пит',
+    'dire_secret_shop': 'потайная лавка Dire',
     'mid_river': 'река на миде',
     'dire_mid_t1': 'T1 Dire на миде',
+    'top_river': 'верхняя река',
+    'top_roshan_pit': 'верхний Рошан-пит',
+    'radiant_secret_shop': 'потайная лавка Radiant',
     'dire_mid_t2': 'T2 Dire на миде',
+    'dire_mid_t3': 'T3 Dire на миде',
+    'dire_throne': 'трон Dire',
+    'dire_fountain': 'фонтан Dire',
     'radiant_triangle': 'треугольник Radiant',
     'radiant_offlane_t2': 'T2 Radiant на сложной',
     'radiant_offlane_t1': 'T1 Radiant на сложной',
@@ -65,7 +84,13 @@ map_location_names = {
     'dire_safelane_jungle': 'лес Dire у легкой',
     'dire_safelane_t3': 'T3 Dire на легкой',
     'dire_safelane_t2': 'T2 Dire на легкой',
-    'dire_safelane_forest': 'лес Dire у легкой'
+    'dire_safelane_forest': 'лес Dire у легкой',
+    'dire_offlane_t1': 'T1 Dire на сложной',
+    'dire_offlane_t2': 'T2 Dire на сложной',
+    'dire_wisdom_rune': 'руна опыта Dire',
+    'dire_offlane_jungle': 'лес Dire у сложной',
+    'dire_offlane_bridge': 'мост на сложной Dire',
+    'dire_triangle': 'треугольник Dire'
 }
 macro_advice_title = 'Макрогейминг'
 build_advice_title = 'Сборка'
