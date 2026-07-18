@@ -12,7 +12,7 @@ from app.repositories.user_repository import user_repository
 from app.services.client_link_service import client_link_service
 from app.services.dota_data_service import dota_data_service
 from app.services.game_advisor_service import game_advisor_service
-from app.services.map_location_service import UNKNOWN_LOCATION_SLUG
+from app.services.map_location_service import UNKNOWN_LOCATION_SLUG, map_location_service
 
 
 logger = logging.getLogger(__name__)
@@ -183,7 +183,7 @@ async def send_enemy_map_info(callback: CallbackQuery):
         await callback.message.answer(text=mes_user[lang].snapshot_not_received)
         return
 
-    match_time = mes_user[lang].advice_actual_at(match_state.get('clock_time'))
+    match_time = f'⏱ {mes_user[lang].format_match_time(match_state.get("clock_time"))}'
     enemy_map_info = format_enemy_map_info(match_state, lang)
     # Send enemy positions separately from paid AI advice.
     await callback.message.answer(
@@ -198,7 +198,7 @@ async def send_enemy_map_info(callback: CallbackQuery):
 
 
 def format_enemy_map_info(match_state: dict, lang: str):
-    """Return enemy last seen table."""
+    """Return enemy last seen list."""
     player_team_name = match_state.get('player', {}).get('team_name')
     opponent_team_name = {'radiant': 'dire', 'dire': 'radiant'}.get(player_team_name)
     if opponent_team_name is None:
@@ -218,17 +218,22 @@ def format_enemy_map_info(match_state: dict, lang: str):
             location_title = mes_user[lang].enemy_not_seen_yet
         else:
             seen_time = mes_user[lang].enemy_seen_time(hero_state.get('visible', False), seen_seconds_ago)
-            location_slug = hero_state.get('last_seen_location_slug', UNKNOWN_LOCATION_SLUG)
+            last_seen_position = hero_state.get('last_seen_position', {})
+            # Recalculate from stored coordinates so active Redis states use the current map zoning.
+            location_slug = map_location_service.get_location_slug(last_seen_position.get('xpos'), last_seen_position.get('ypos'))
             # Keep detected area names English and generated from the stored slug.
             location_title = mes_user[lang].enemy_unknown_area if location_slug == UNKNOWN_LOCATION_SLUG else format_map_location_title(location_slug)
         hero_title = dota_data['heroes'][hero_name]['definition']['localized_name']
-        lines.append(f'{hero_title} | {location_title} | {seen_time}')
+        if seen_time == mes_user[lang].enemy_no_seen_time:
+            lines.append(f'• {hero_title}\n  {location_title}')
+        else:
+            lines.append(f'• {hero_title}\n  {location_title} · {seen_time}')
 
     if not lines:
         return ''
 
-    # Plain text table is used because outgoing advice disables Telegram parse mode.
-    return f'{mes_user[lang].enemy_map_info_title}\n\n{mes_user[lang].enemy_map_info_header}\n' + '\n'.join(lines) + '\n\n'
+    # Plain text list keeps the Telegram message readable without parse mode.
+    return f'{mes_user[lang].enemy_map_info_title}\n\n' + '\n\n'.join(lines) + '\n\n'
 
 
 def format_map_location_title(location_slug: str):

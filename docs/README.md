@@ -123,11 +123,11 @@ Enemy position fields stored inside each locked enemy hero state:
 }
 ```
 
-`last_seen_location_slug` is returned by `MapLocationService` from calibrated Dota map coordinates. It uses nearest-point circular or oval zones for bases, lanes, jungles, lotus pools, tormentors, twin gates, wisdom runes, river areas, and separate top/bot Roshan pits. Coordinates inside a zone return that zone, and coordinates slightly outside coverage return the nearest zone up to `NEAREST_LOCATION_DISTANCE_LIMIT`. Coordinates farther away return `unknown`.
+`last_seen_location_slug` is returned by `MapLocationService` from calibrated Dota map coordinates. It uses 30 large nearest-point circular or oval zones for highgrounds, lanes, jungles, triangles, lotus pools, tormentors, twin gates, wisdom runes, secret shops, edge areas, and separate top/bot Roshan pits. Coordinates inside a zone return that zone, and coordinates slightly outside coverage return the nearest zone up to `NEAREST_LOCATION_DISTANCE_LIMIT`. Coordinates farther away return `unknown`.
 
 `app/services/map_location_service.py`
 
-Maps raw GSI minimap coordinates to stable location slugs by nearest calibrated point with a per-point zone. `MapLocationPoint.radius` is the X radius. `radius_y` is optional; when it is missing, the zone stays circular. `rotation` rotates oval zones in degrees. The closest zone wins when the coordinate is inside the normalized circular or oval boundary, or when it is outside all zones but still within `NEAREST_LOCATION_DISTANCE_LIMIT = 1.35` from the nearest zone. The service returns slugs only; the user bot formats location slugs as English readable names for both RU and EN interfaces.
+Maps raw GSI minimap coordinates to stable location slugs by nearest calibrated point with a per-point zone. `MapLocationPoint.radius` is the X radius. `radius_y` is optional; when it is missing, the zone stays circular. `rotation` rotates oval zones in degrees. The closest zone wins when the coordinate is inside the normalized circular or oval boundary, or when it is outside all zones but still within `NEAREST_LOCATION_DISTANCE_LIMIT = 1.35` from the nearest zone. Runtime map zones are intentionally coarse and user-facing; old tower/river/camp micro-zones were replaced by large area zones. The service returns slugs only; the user bot formats location slugs as English readable names for both RU and EN interfaces.
 
 Zones can be inspected and edited visually in `docs/map-location-coverage.html`, which overlays GSI zones on `docs/dota_tga_d8178876.png` through the official `dota.txt` overview values: `pos_x = -9472`, `pos_y = 9472`, `scale = 18.5`. The logical overview is `1024x1024`: this maps Dota coordinates from `-9472..9472` on each axis. The editor can add zones, delete zones, move zone centers, resize X/Y radiuses, rotate ovals, and export ready-to-copy `MapLocationPoint(...)` lines for `app/services/map_location_service.py`.
 
@@ -325,6 +325,8 @@ The main user menu contains `GSI config` and the language toggle. `open_gsi_menu
 
 Raw OpenDota hero definitions are not sent to AI. Hero identity comes from `match_state`, while combat details come from `hero_mechanics`, win rates, counters, and builds.
 
+Enemy position reasoning is scoped to `macro_gaming`. The prompt treats `seen_seconds_ago` as uncertainty, not as a fixed threshold. It asks the model to infer whether missing enemies are likely farming, moving, warding, smoking, setting up Roshan, or preparing a gank from hero role, last seen area, current game time, visible enemy count, objectives, and map state. Farming cores missing near jungle/triangle/lane/edge farm areas should not automatically be treated as danger; initiators, roamers, supports, or several missing enemies increase smoke/gank/objective risk. Suggested actions should be concrete: ward, play safer, group, gank a likely farm route, push a lane, or avoid risky Roshan/highground.
+
 `hero_mechanics` is prompt-optimized by `GameAdvisorService.compact_hero_mechanics()` before sending to AI. The local hero keeps abilities, shard, scepter, talents, and facets. Allied and enemy heroes keep abilities, shard, and scepter so the model can reason about teamfight coordination and enemy threats without sending talent data or empty technical fields.
 
 `local_items` is also compacted with `GameAdvisorService.compact_ability_or_item()` so item descriptions, cooldowns, costs, behavior, and special values remain available without empty ability flags.
@@ -341,10 +343,11 @@ The cooldown is configured by `AI_ADVICE_COOLDOWN` and is set before the paid AP
 ## Enemy Map Info Flow
 
 1. The `where_are_enemies` callback verifies that accumulated match state exists.
-2. The handler formats the current match time and enemy map info from `match_state`.
-3. Enemy location slugs are rendered as English readable names in both languages, for example `radiant_jungle_big -> Radiant Jungle Big`.
-4. Enemies with no last seen position are shown as `Not seen yet`; enemies with coordinates too far from the nearest configured zone are shown as `Unknown area`.
-5. The bot sends a separate localized message with match time, enemy locations, and the same follow-up keyboard as the AI advice message.
+2. The handler formats the current match time and enemy map info from `match_state` as a readable bullet list, not a pipe-delimited table.
+3. Enemy locations are recalculated from `last_seen_position` during formatting, so active Redis states use the current map zoning even if an older `last_seen_location_slug` was stored before deployment.
+4. Enemy location slugs are rendered as English readable names in both languages, for example `radiant_jungle_big -> Radiant Jungle Big`.
+5. Enemies with no last seen position are shown as `Not seen yet`; enemies with coordinates too far from the nearest configured zone are shown as `Unknown area`.
+6. The bot sends a separate localized message with match time, enemy locations, and the same follow-up keyboard as the AI advice message.
 
 ## SQLite Tables
 
