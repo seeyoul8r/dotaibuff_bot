@@ -26,14 +26,18 @@ class HeroTeamDetector:
         live_allied_heroes = self.get_live_allied_heroes(minimap_heroes)
         if local_hero_name not in live_allied_heroes:
             return
-        if len(draft_heroes) != 10 or len(live_allied_heroes) != 5:
-            return
-
-        enemy_heroes = draft_heroes - live_allied_heroes
-        if len(enemy_heroes) != 5:
+        if len(live_allied_heroes) != 5:
             return
 
         opponent_team_name = 'dire' if player_team_name == 'radiant' else 'radiant'
+        if len(draft_heroes) == 10:
+            enemy_heroes = draft_heroes - live_allied_heroes
+        else:
+            # Lock from live minimap data when this client missed the exact draft snapshot.
+            enemy_heroes = self.get_known_enemy_heroes(match_state, minimap_heroes, opponent_team_name)
+        if len(enemy_heroes) != 5:
+            return
+
         match_state['radiant']['heroes'] = {}
         match_state['dire']['heroes'] = {}
         match_state['unknown_heroes'] = {}
@@ -61,6 +65,15 @@ class HeroTeamDetector:
             for minimap_hero in minimap_heroes
             if minimap_hero['image'] in ('minimap_herocircle', 'minimap_herocircle_self', 'minimap_heroinvis')
         }
+
+    def get_known_enemy_heroes(self, match_state: dict, minimap_heroes: list, opponent_team_name: str):
+        """Return enemy heroes seen through live enemy minimap markers."""
+        enemy_heroes = set(match_state[opponent_team_name]['heroes'])
+        for minimap_hero in minimap_heroes:
+            if minimap_hero['image'] == 'minimap_enemyicon':
+                # Include the current snapshot because it has not been applied to match_state yet.
+                enemy_heroes.add(minimap_hero['hero_name'])
+        return enemy_heroes
 
     def apply_hero(self, match_state: dict, hero_name: str, team_name: str | None, source: str, now: str):
         """Apply hero to accumulated match state."""
@@ -151,6 +164,11 @@ class MatchStateService:
             )
             return
         # Apply reliable allied and visible-enemy markers while waiting for exact roster lock.
+        opponent_team_name = {'radiant': 'dire', 'dire': 'radiant'}.get(player_team_name)
+        if opponent_team_name is not None:
+            for enemy_hero in match_state[opponent_team_name]['heroes'].values():
+                # Keep pre-lock enemy visibility current for enemy map info.
+                enemy_hero['visible'] = False
         for minimap_hero in minimap_heroes:
             if minimap_hero['image'] == 'minimap_plaincircle':
                 continue
@@ -164,6 +182,15 @@ class MatchStateService:
             # Keep the last reliable visible position for map-aware advice.
             hero_state['last_seen_position'] = minimap_hero['position']
             hero_state['last_seen_image'] = minimap_hero['image']
+            if minimap_hero['image'] == 'minimap_enemyicon':
+                # Preserve last seen timing before roster lock so visible enemies are not shown as never seen.
+                hero_state['was_visible'] = True
+                hero_state['visible'] = True
+                hero_state['last_seen_game_time'] = match_state.get('clock_time')
+                hero_state['last_seen_location_slug'] = map_location_service.get_location_slug(
+                    minimap_hero['position'].get('xpos'),
+                    minimap_hero['position'].get('ypos')
+                )
 
         await redis_cache.set_match_state(user_id, match_id, match_state)
         logger.info(

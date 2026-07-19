@@ -33,7 +33,7 @@ DotAIBuffBot is a Telegram bot plus local FastAPI service for collecting Dota 2 
 8. `MatchService` coordinates snapshot processing.
 9. When `LOG_REQUESTS=1`, sanitized snapshots are saved to JSONL files for development analysis.
 10. `MatchStateService` updates the normalized internal match state in Redis.
-   It locks the exact 5v5 roster from draft and live minimap markers, then keeps updating last seen enemy positions from `minimap_enemyicon`.
+   It locks the exact 5v5 roster from draft and live minimap markers, or from 5 live allies plus 5 known enemy minimap icons when the client missed the exact draft snapshot, then keeps updating last seen enemy positions from `minimap_enemyicon`.
 11. `DotaDataService` loads OpenDota, dota2.com datafeed, and STRATZ data from the local cache file on startup, or fetches it once if no cache exists yet.
 12. The match start notification shows the enemy map info button and the recommendation button. The recommendation button combines normalized match state with relevant Dota mechanics context and calls Gemini.
 13. When `LOG_REQUESTS=1`, the exact model request fields are written to SQLite before the Gemini call and updated with the response or error after the call.
@@ -118,6 +118,7 @@ Current hero sources:
 - allied heroes from `minimap_herocircle`, `minimap_herocircle_self`, and `minimap_heroinvis`;
 - enemy heroes from `minimap_enemyicon`;
 - draft hero pool from unique `minimap_plaincircle` names before the roster is locked;
+- before the roster is locked, visible enemies from `minimap_enemyicon` already store last seen position, calibrated map location slug, game time, and current visibility;
 - after the roster is locked, the last visible enemy position, calibrated map location slug, game time, and current visibility are stored for locked enemy heroes.
 
 `minimap_plaincircle.team` and draft-layout coordinates are not reliable. Team assignment therefore follows this sequence:
@@ -125,9 +126,10 @@ Current hero sources:
 1. `player.team_name` defines the local and opposing teams.
 2. `HeroTeamDetector` stores the latest snapshot with exactly 10 unique `minimap_plaincircle` hero names in `draft_heroes` as the draft pool.
 3. Live allied markers from `minimap_herocircle`, `minimap_herocircle_self`, and `minimap_heroinvis` build the local team candidate.
-4. The roster is locked only when the draft pool has exactly 10 unique heroes, the live allied candidate has exactly 5 unique heroes, and the local hero is one of those 5.
-5. The 5 live allied heroes are assigned to the local player's team, and the remaining 5 draft heroes are assigned to the opposing team.
-6. After `roster_locked = true`, minimap hero roster detection stops changing team membership, but `minimap_enemyicon` keeps updating visibility and last seen data for the locked enemy roster.
+4. The primary roster lock path requires the draft pool to have exactly 10 unique heroes, the live allied candidate to have exactly 5 unique heroes, and the local hero to be one of those 5.
+5. If the draft pool is unavailable but the accumulated live minimap state has 5 allied heroes and 5 enemy heroes from `minimap_enemyicon`, those 10 heroes are used to lock the roster.
+6. The 5 live allied heroes are assigned to the local player's team, and the 5 enemy heroes from the draft pool or live enemy icons are assigned to the opposing team.
+7. After `roster_locked = true`, minimap hero roster detection stops changing team membership, but `minimap_enemyicon` keeps updating visibility and last seen data for the locked enemy roster.
 
 Enemy position fields stored inside each locked enemy hero state:
 
