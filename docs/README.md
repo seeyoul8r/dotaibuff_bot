@@ -474,6 +474,14 @@ STRATZ_API_TOKEN=Bearer ...
 
 `docker-compose.yml` runs that image as the `app` service, starts Redis as the `redis` service with its own named volume, reads `.env` through `env_file`, overrides `REDIS_URL` to `redis://redis:6379/0` for container networking, binds FastAPI to `127.0.0.1:8000` for Caddy, publishes no public FastAPI port, and bind-mounts the whole project into `/app` so `git pull` plus an app container restart updates Python code without rebuilding the image.
 
+Both `app` and `redis` use the Docker `json-file` logging driver with `max-size: "10m"` and `max-file: "3"`. Docker rotates container stdout/stderr logs and keeps at most three files of approximately 10 MB per container. These limits do not apply to application files such as `data/gsi_snapshots/*.jsonl` or SQLite AI request logs; `LOG_REQUESTS` controls those writers.
+
+After changing the Docker logging configuration, recreate the containers to apply it; a restart does not update their logging settings:
+
+```text
+docker compose up -d --force-recreate app redis
+```
+
 After code-only changes on a server:
 
 ```text

@@ -13,12 +13,24 @@ services:
       - .:/app
     depends_on:
       - redis
+    # Rotate container logs to keep at most three 10 MB files.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     restart: unless-stopped
 
   redis:
     image: redis:7-alpine
     volumes:
       - redis-data:/data
+    # Rotate container logs to keep at most three 10 MB files.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     restart: unless-stopped
 
 volumes:
