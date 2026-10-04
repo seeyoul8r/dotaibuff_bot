@@ -33,6 +33,9 @@
 - After the full enemy roster is known, the recommendation uses where and when enemies were last seen on the minimap.
 - Telegram shows a temporary animated Thinking status while AI prepares the response.
 - The response arrives as one message with macro gaming, build, and the current micro gaming priority. It shows the match time it is based on.
+- Build advice suggests the next purchase and a later priority, based on inventory, gold, and game time.
+- When data supports it, AI explains the purchase against a named enemy and for a combination with a named ally.
+- Statistics guide the build. Mechanics explain interactions; AI states limits when data is missing.
 - At the end of the response, the bot shows when the next request is available and adds the `♿️ Where are enemies?` and `📦 Get AI advice` buttons.
 - If AI does not respond, the bot reports the error.
 - Each user can request advice no more than once every 3 minutes.

@@ -180,6 +180,8 @@ Stores map location calibration schemas such as `MapLocationPoint`.
 
 Stores `GAME_ADVISOR_PROMPT`. The prompt requires advice based only on supplied data and requests the answer in the user's selected language.
 
+The prompt uses short English instructions. Build advice requests the next item and one later priority, with named enemy threats and allied spell combinations when supplied mechanics support them. Statistics guide priorities but do not prove item effectiveness against a specific hero. Enemy matchup `synergy` is not allied synergy. Item mechanics still cover only the local inventory; mechanics for future purchases are not added by this prompt change.
+
 `app/services/dota_data_service.py`
 
 Sends admin-bot notifications when Dota data updates start, complete, or fail.
@@ -346,7 +348,7 @@ The main user menu contains `GSI config` and the language toggle. `open_gsi_menu
 
 Raw OpenDota hero definitions are not sent to AI. Hero identity comes from `match_state`, while combat details come from `hero_mechanics`, win rates, counters, and builds.
 
-Enemy position reasoning is scoped to `macro_gaming`. The prompt treats `seen_seconds_ago` as uncertainty, not as a fixed threshold. It asks the model to infer whether missing enemies are likely farming, moving, warding, smoking, setting up Roshan, or preparing a gank from hero role, last seen area, current game time, visible enemy count, objectives, and map state. Farming cores missing near jungle/triangle/lane/edge farm areas should not automatically be treated as danger; initiators, roamers, supports, or several missing enemies increase smoke/gank/objective risk. Suggested actions should be concrete: ward, play safer, group, gank a likely farm route, push a lane, or avoid risky Roshan/highground.
+Enemy position reasoning is scoped to `macro_gaming`. Older sightings mean more uncertainty. The prompt asks the model to assess missing enemies from their heroes, last locations, game time, and objectives. It considers farming, ganks, smoke, and grouping, and does not treat every missing enemy as danger. Advice must give a specific next map action or objective.
 
 `hero_mechanics` is prompt-optimized by `GameAdvisorService.compact_hero_mechanics()` before sending to AI. The local hero keeps abilities, shard, scepter, talents, and facets. Allied and enemy heroes keep abilities, shard, and scepter so the model can reason about teamfight coordination and enemy threats without sending talent data or empty technical fields.
 
